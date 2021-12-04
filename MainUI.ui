@@ -501,6 +501,68 @@
     <bool>false</bool>
    </property>
   </widget>
+  <widget class="QLabel" name="infoPopup">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>270</x>
+     <y>120</y>
+     <width>241</width>
+     <height>61</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>20</pointsize>
+    </font>
+   </property>
+   <property name="autoFillBackground">
+    <bool>true</bool>
+   </property>
+   <property name="frameShape">
+    <enum>QFrame::Box</enum>
+   </property>
+   <property name="frameShadow">
+    <enum>QFrame::Raised</enum>
+   </property>
+   <property name="lineWidth">
+    <number>5</number>
+   </property>
+   <property name="text">
+    <string>Preset x Saved!</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignCenter</set>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="buttonPrev">
+   <property name="geometry">
+    <rect>
+     <x>270</x>
+     <y>400</y>
+     <width>101</width>
+     <height>61</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Prev</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="buttonNext">
+   <property name="geometry">
+    <rect>
+     <x>440</x>
+     <y>400</y>
+     <width>101</width>
+     <height>61</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Next</string>
+   </property>
+  </widget>
   <zorder>cameraListWidget</zorder>
   <zorder>labelTopLeft</zorder>
   <zorder>labelMidLeft</zorder>
@@ -515,6 +577,9 @@
   <zorder>labelInfo</zorder>
   <zorder>camPosFrame</zorder>
   <zorder>progressBar</zorder>
+  <zorder>infoPopup</zorder>
+  <zorder>buttonPrev</zorder>
+  <zorder>buttonNext</zorder>
  </widget>
  <resources/>
  <connections/>
