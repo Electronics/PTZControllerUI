@@ -226,13 +226,16 @@ class SerialControl(QThread):
     buttonReleaseSignal = pyqtSignal(int)
     uiSignal = pyqtSignal(list)
 
-
+    port = None
     learning = False
 
     def initPort(self):
-        self.port = serial.Serial(SERIAL_PORT, 115200)
+        try:
+            self.port = serial.Serial(SERIAL_PORT, 115200)
 
-        self.port.write(b'HELLO\n')
+            self.port.write(b'HELLO\n')
+        except serial.SerialException:
+            print("Failed to open serial port")
     def __init__(self):
         QThread.__init__(self)
         self.initPort()
@@ -242,6 +245,9 @@ class SerialControl(QThread):
 
     def run(self):
         print("Serial Thread started")
+        if not self.port or not self.port.is_open:
+            print("Serial port not found, aborting external control")
+            return
         while True:
             try:
                 while True:
