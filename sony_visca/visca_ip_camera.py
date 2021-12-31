@@ -53,6 +53,9 @@ class ViscaIPCamera:
 		self._queue_loop = None  # Handle to the Task running the queue processing loop
 
 	def __str__(self):
+		return self.name+" ("+self.ip+")"
+
+	def __str__(self):
 		return f"{self.name}({self.mac}) {self.ip}"
 
 	def __repr__(self):
@@ -87,19 +90,21 @@ class ViscaIPCamera:
 		"""Close communication sockets, and event loop if this is the last camera
 		We have to teardown the event loop when the last camera is torn down as we're hiding async from the user
 		"""
-		future = asyncio.run_coroutine_threadsafe(self._close(), self._LOOP_THREAD.loop)
-		future.result()
-		LOGGER.info("Closed remote UDP socket to cam %s", self.ip)
+		if self._LOOP_THREAD:
+			future = asyncio.run_coroutine_threadsafe(self._close(), self._LOOP_THREAD.loop)
+			future.result()
+			LOGGER.info("Closed remote UDP socket to cam %s", self.ip)
 		self.is_connected = False
 		self.__class__._CONNECTED_CAMS -= 1
 		if self._CONNECTED_CAMS == 0:
 			# If this is the last camera, shutdown the local socket and the event loop
-			future = asyncio.run_coroutine_threadsafe(self._close_local(), self._LOOP_THREAD.loop)
-			future.result()
-			LOGGER.info("Closed local UDP socket")
-			self._LOOP_THREAD.stop()
-			LOGGER.info("Stopped event loop")
-			self.__class__._LOOP_THREAD = None
+			if self._LOOP_THREAD:
+				future = asyncio.run_coroutine_threadsafe(self._close_local(), self._LOOP_THREAD.loop)
+				future.result()
+				LOGGER.info("Closed local UDP socket")
+				self._LOOP_THREAD.stop()
+				LOGGER.info("Stopped event loop")
+				self.__class__._LOOP_THREAD = None
 
 	async def _close(self):
 		"""Close this camera"""
@@ -254,7 +259,7 @@ class ViscaIPCamera:
 			s.bind(("", 52380))
 
 			discoverCmd = b"\x02ENQ:network\xFF\x33"
-			LOGGER.debug("Sending discover...")
+			LOGGER.info("Sending discover...")
 			s.sendto(discoverCmd, ('<broadcast>', 52380))
 			cameras = []
 			try:
@@ -268,7 +273,7 @@ class ViscaIPCamera:
 					LOGGER.info("Found camera '%s' (%s) at IP %s", name, mac, addr[0])
 					cameras.append(cls(name, addr[0], mac))
 			except socket.timeout:
-				LOGGER.debug("End discover")
+				LOGGER.info("End discover")
 			return cameras
 		finally:
 			s.close()

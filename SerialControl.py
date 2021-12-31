@@ -6,6 +6,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 from sony_visca.visca_commands import Command
 
 log = logging.getLogger("SerialControl")
+log.setLevel(logging.DEBUG)
 
 SERIAL_PORT = "COM8"
 JOYSTICK_NUM_STEPS = 16 # number of steps in the +ve and -ve directions
@@ -128,7 +129,7 @@ class SerialControl(QThread):
                 while True:
                     data = self.port.readline().decode("utf-8").strip()
                     dataSplit = serialRegex.search(data)
-                    log.debug("Serial data:",data)
+                    log.debug("Serial data: %s",data)
                     if not dataSplit:
                         log.warning("No data in serial command")
                         continue
@@ -139,25 +140,25 @@ class SerialControl(QThread):
                         if command=="X":
                             x = int(dataSplit["num0"])
                             self.vx = int(float(x)/JOYSTICK_NUM_STEPS*18)
-                            log.debug("X position", x,"converted to speed",self.vx)
+                            log.debug("X position %d converted to speed %d", x, self.vx)
                             movementCommand = True
                         elif command=="Y":
                             y = int(dataSplit["num0"])
                             self.vy = int(float(y) / JOYSTICK_NUM_STEPS * 17)
-                            log.debug("Y position", y, "converted to speed", self.vy)
+                            log.debug("Y position %d converted to speed %d", y, self.vy)
                             movementCommand = True
                         elif command=="Z":
                             z = int(dataSplit["num0"])
                             self.vz = int(float(z) / JOYSTICK_NUM_STEPS * 7)
-                            log.debug("Z position", z, "converted to speed", self.vz)
+                            log.debug("Z position %d converted to speed %d", z, self.vz)
                             movementCommand = True
                         elif command=="P":
                             button = int(dataSplit["num0"])*8 + int(dataSplit["num1"])
-                            log.debug("Button Press",button)
+                            log.debug("Button Press %d",button)
                             self.buttonPressSignal.emit(button)
                         elif command=="R":
                             button = int(dataSplit["num0"]) * 8 + int(dataSplit["num1"])
-                            log.debug("Button Release",button)
+                            log.debug("Button Release %d",button)
                         elif command=="BOOT":
                             restX = int(dataSplit["num0"])
                             restY = int(dataSplit["num1"])
@@ -165,7 +166,7 @@ class SerialControl(QThread):
                             stepX = int(dataSplit["num3"])
                             stepY = int(dataSplit["num4"])
                             stepZ = int(dataSplit["num5"])
-                            log.info("uC is Booting",restX,restY,restZ,stepX,stepY,stepZ)
+                            log.info("uC is Booting %d %d %d %d %d %d",restX,restY,restZ,stepX,stepY,stepZ)
                         elif command=="LRN":
                             rawX = int(dataSplit["num0"])
                             rawY = int(dataSplit["num1"])
@@ -176,7 +177,7 @@ class SerialControl(QThread):
                             maxX = int(dataSplit["num6"])
                             maxY = int(dataSplit["num7"])
                             maxZ = int(dataSplit["num8"])
-                            log.debug("Learning mode",data)
+                            log.debug("Learning mode %s",data)
                             self.uiSignal.emit(["detailedPopupDetails","setText","X:%d Y:%d Z:%d\nminX:%d minY:%d minZ:%d\nmaxX:%d maxY:%d maxZ:%d"%(rawX,rawY,rawZ,minX,minY,minZ,maxX,maxY,maxZ)])
                             if not self.learning:
                                 self.learning = True
@@ -192,12 +193,12 @@ class SerialControl(QThread):
                             stepX = int(dataSplit["num3"])
                             stepY = int(dataSplit["num4"])
                             stepZ = int(dataSplit["num5"])
-                            log.debug("Learning finished",restX,restY,restZ,stepX,stepY,stepZ)
+                            log.debug("Learning finished %d %d %d %d %d %d",restX,restY,restZ,stepX,stepY,stepZ)
                             self.learning = False
                             self.uiSignal.emit(["detailedPopup","hide"])
                             self.uiSignal.emit(["popup","Cal Done!"])
                         else:
-                            print("Unknown serial data:",data)
+                            print("Unknown serial data: %s",data)
 
                         if movementCommand:
                             self.moveCam()

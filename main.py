@@ -2,24 +2,29 @@ import os
 import socket
 import subprocess
 import sys
-import time
 import re
-import traceback
 import logging
 
-import serial
+from getmac import get_mac_address
+
 from PyQt5 import QtCore, QtWidgets, QtGui
-from PyQt5.QtCore import pyqtSignal, QObject, QThread, QTimer
+from PyQt5.QtCore import pyqtSignal, QTimer
 from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QApplication, QLabel, QGridLayout, QWidget, QPushButton, QGraphicsScene, QGraphicsRectItem, QListWidgetItem, QMainWindow
+from PyQt5.QtWidgets import QApplication, QGraphicsScene, QGraphicsRectItem, QListWidgetItem, QMainWindow
 from PyQt5.uic import loadUi
 
+import database
+from ButtonControl import ButtonControl
+from CameraPinger import CameraPinger
 from sony_visca.visca_ip_camera import ViscaIPCamera
 from sony_visca.visca_commands import Command
 from SerialControl import SerialControl
 
+
+logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("PiControl")
-logging.basicConfig(level=logging.DEBUG)
+log.setLevel(logging.DEBUG)
+
 
 multipleSpaceRegex = re.compile(r" {2,}")
 
@@ -34,261 +39,6 @@ def padIPAddress(ip):
     nOctets = [int(x) for x in octets]
     return "{:03d}.{:03d}.{:03d}.{:03d}".format(nOctets[0],nOctets[1],nOctets[2],nOctets[3])
 
-class ButtonControl(QObject):
-    functionDict = {} # a way of dynamically changing what the buttons do in a nice-ish way
-    def __init__(self, parent):
-        super().__init__()
-        self.UI = parent
-
-    typingPos = -1  # track where in an input string we are, -1 = no input
-    typingString = ""
-    typingStringOriginal = ""
-    typingCallback = None
-
-    def typingOff(self):
-        self.typingPos = -1
-        self.typingString = ""
-        self.UI.typingFrame.hide()
-
-    def typingOn(self):
-        self.UI.typingFrame.show()
-        self.UI.typingInput.setFocus()
-        if self.typingPos<0:
-            self.typingPos = 0
-
-    def input(self, s, title="", callback=None):
-        # callback should be a function with the arguments (string), if the returned string is None, cancel was pressed
-        self.typingString = s
-        self.typingStringOriginal = s # for undo operations
-        self.typingPos=0
-        self.typingCallback = callback
-        self.UI.typingTitle.setText(title)
-        self.typingOn()
-        self.typingUpdate()
-
-    def typingUpdate(self):
-        self.UI.typingInput.setText(self.typingString)
-        self.UI.typingInput.setFocus()
-        self.UI.typingInput.setCursorPosition(self.typingPos)
-
-    skipableCharacters = [",","."]
-    def checkTypeSkip(self,direction=0): # dir = 0 (forward) or -1 (backward) normally
-        if (self.typingPos+direction) < 0 or \
-                (self.typingPos+direction)>=len(self.typingStringOriginal) or \
-                self.typingStringOriginal == "":
-            return
-        if self.typingStringOriginal[self.typingPos+direction] in self.skipableCharacters:
-            self.typingPos+=direction or 1
-
-    def typeChar(self, c):
-        if self.typingPos<0 or self.typingString=="":
-            return
-        self.typingString = self.typingString[:self.typingPos]+c+ self.typingString[self.typingPos+1:]
-        self.typingPos += 1
-        self.checkTypeSkip()
-        self.typingUpdate()
-
-    def backspace(self):
-        if self.typingPos==0:
-            self.typingCallback(None)
-            self.typingOff()
-        if self.typingPos<=0 or self.typingString=="" or self.typingStringOriginal=="":
-            return
-        self.checkTypeSkip(-1)
-        self.typingPos -= 1
-        self.typingString = self.typingString[:self.typingPos] + self.typingStringOriginal[self.typingPos] + self.typingString[self.typingPos + 1:]
-        self.typingUpdate()
-
-    def ButtonTopLeft(self,event=None):
-        print("Button Top Left Pressed")
-        if "TopLeft" in self.functionDict:
-            self.functionDict["TopLeft"]()
-    def ButtonMidLeft(self,event=None):
-        print("Button Mid Left Pressed")
-        if "MidLeft" in self.functionDict:
-            self.functionDict["MidLeft"]()
-    def ButtonBottomLeft(self,event=None):
-        print("Button Bottom Left Pressed")
-        if "BottomLeft" in self.functionDict:
-            self.functionDict["BottomLeft"]()
-    def ButtonCenterLeft(self,event=None):
-        print("Button Center Left Pressed")
-        if "CenterLeft" in self.functionDict:
-            self.functionDict["CenterLeft"]()
-    def ButtonCenterMid(self,event=None):
-        print("Button Center Mid Pressed")
-        if "CenterMid" in self.functionDict:
-            self.functionDict["CenterMid"]()
-    def ButtonCenterRight(self,event=None):
-        print("Button Center Right Pressed")
-        if "CenterRight" in self.functionDict:
-            self.functionDict["CenterRight"]()
-    def ButtonBottomRight(self,event=None):
-        print("Button Bottom Right Pressed")
-        if "BottomRight" in self.functionDict:
-            self.functionDict["BottomRight"]()
-    def ButtonMidRight(self,event=None):
-        print("Button Mid Right Pressed")
-        if "MidRight" in self.functionDict:
-            self.functionDict["MidRight"]()
-    def ButtonTopRight(self,event=None):
-        print("Button Top Right Pressed")
-        if "TopRight" in self.functionDict:
-            self.functionDict["TopRight"]()
-    def ButtonNext(self,event=None):
-        print("Button Next Pressed")
-        if "Next" in self.functionDict:
-            self.functionDict["Next"]()
-    def ButtonPrev(self,event=None):
-        print("Button Prev Pressed")
-        if "Prev" in self.functionDict:
-            self.functionDict["Prev"]()
-
-    def Button0(self,event=None):
-        self.typeChar("0")
-    def Button1(self,event=None):
-        self.typeChar("1")
-    def Button2(self,event=None):
-        self.typeChar("2")
-    def Button3(self,event=None):
-        self.typeChar("3")
-    def Button4(self,event=None):
-        self.typeChar("4")
-    def Button5(self,event=None):
-        self.typeChar("5")
-    def Button6(self,event=None):
-        self.typeChar("6")
-    def Button7(self,event=None):
-        self.typeChar("7")
-    def Button8(self,event=None):
-        self.typeChar("8")
-    def Button9(self,event=None):
-        self.typeChar("9")
-    def ButtonClear(self,event=None):
-        self.backspace()
-    def ButtonEnter(self, event=None):
-        retStr = self.UI.typingInput.text()
-        self.typingOff()
-        # validity should be checked in the callback
-        # as well as any feedback to the user
-        self.typingCallback(retStr)
-
-    def connectUIButtons(self):
-        self.UI.labelTopLeft.mousePressEvent = self.ButtonTopLeft
-        self.UI.labelMidLeft.mousePressEvent = self.ButtonMidLeft
-        self.UI.labelBottomLeft.mousePressEvent = self.ButtonBottomLeft
-        self.UI.labelCenterLeft.mousePressEvent = self.ButtonCenterLeft
-        self.UI.labelCenterMid.mousePressEvent = self.ButtonCenterMid
-        self.UI.labelCenterRight.mousePressEvent = self.ButtonCenterRight
-        self.UI.labelBottomRight.mousePressEvent = self.ButtonBottomRight
-        self.UI.labelMidRight.mousePressEvent = self.ButtonMidRight
-        self.UI.labelTopRight.mousePressEvent = self.ButtonTopRight
-
-        # "debug" buttons
-        self.UI.buttonPrev.clicked.connect(self.ButtonPrev)
-        self.UI.buttonNext.clicked.connect(self.ButtonNext)
-        self.UI.button0.clicked.connect(self.Button0)
-        self.UI.button1.clicked.connect(self.Button1)
-        self.UI.button2.clicked.connect(self.Button2)
-        self.UI.button3.clicked.connect(self.Button3)
-        self.UI.button4.clicked.connect(self.Button4)
-        self.UI.button5.clicked.connect(self.Button5)
-        self.UI.button6.clicked.connect(self.Button6)
-        self.UI.button7.clicked.connect(self.Button7)
-        self.UI.button8.clicked.connect(self.Button8)
-        self.UI.button9.clicked.connect(self.Button9)
-        self.UI.buttonClear.clicked.connect(self.ButtonClear)
-        self.UI.buttonEnter.clicked.connect(self.ButtonEnter)
-
-    def connectFunctions(self, fDict):
-        self.functionDict = fDict
-
-    def decodeButton(self, num, press=True):
-        buttonMap = [
-            self.Button1, # 0,0
-            self.Button2,
-            self.Button3,
-            None,
-            self.Button9,
-            self.Button4,
-            self.Button5,
-            self.Button6, # 0,7
-            self.Button0, # 1,0
-            self.ButtonEnter,
-            self.Button7,
-            self.Button8,
-            self.ButtonBottomLeft,
-            self.ButtonMidLeft,
-            self.ButtonTopLeft,
-            self.ButtonCenterLeft, # 1,7
-            self.ButtonCenterMid, # 2,0
-            self.ButtonCenterRight,
-            self.ButtonPrev,
-            self.ButtonNext,
-            self.ButtonTopRight,
-            self.ButtonMidRight,
-            self.ButtonBottomRight,
-            self.ButtonClear
-        ]
-        if press:
-            buttonMap[num]()
-
-
-
-class CameraPinger(QThread):
-    cameraUpdate = pyqtSignal(tuple) # (name, status)
-    cameras = {}
-    cameraList = []
-    index = 0
-    _isRunning=True
-
-    def __init__(self, ticker=None):
-        QThread.__init__(self)
-        self.setTerminationEnabled(True)
-        self.ticker = ticker # UI element to see if it's still working
-    def __del__(self):
-        pass
-
-    def setCameras(self,cameras):
-        self.cameras = cameras
-        self.cameraList = list(cameras)
-        self.index = 0
-
-    def stop(self):
-        self._isRunning=False
-        self.quit()
-        self.wait()
-        self.deleteLater()
-
-    def run(self):
-        print("Camera pinger Thread started")
-        while self._isRunning:
-            if len(self.cameraList)>0:
-                #todo do the ping / camera check
-                camera = self.cameras[self.cameraList[self.index]]
-                cameraName = self.cameraList[self.index]
-                #ip = camera.ip
-                #DEBUG:
-                ip = cameraName[cameraName.index("(")+1:cameraName.index(")")]
-
-                if os.name=="nt":
-                    response = subprocess.call(["ping", "-n", "1", "-w", "500", ip], stdout=subprocess.DEVNULL)
-                else:
-                    response = subprocess.call(["ping", "-c", "1", "-i", "0.5", ip], stdout=subprocess.DEVNULL)
-
-                if response==0:
-                    self.cameraUpdate.emit((cameraName, 1))
-                else:
-                    self.cameraUpdate.emit((cameraName, -1))
-
-                self.index+=1
-                if self.index>=len(self.cameraList):
-                    self.index = 0
-                if self.ticker:
-                    self.ticker.setText(str(self.index))
-            QtWidgets.qApp.processEvents()
-
-            QThread.msleep(500)
 
 class MainScreen(QMainWindow):
     uiUpdateTrigger = pyqtSignal(list) # for arbitrary UI updates from other threads (filthy!)
@@ -327,28 +77,39 @@ class MainScreen(QMainWindow):
         self.serial.cameraControl.connect(self.doCameraCommand)
         self.serial.start()
 
-        self.pinger = CameraPinger(self.ticker)
+        self.pinger = CameraPinger(self.ticker, self.cameras)
         self.pinger.cameraUpdate.connect(self.pingCameraCallback)
-        # self.pinger.start()
+        self.pinger.start()
 
         self.show()
 
         self.discoverCameras()
-        self.nextCamera() # select a camera to start with please
         self.debug()
+        self.nextCamera() # select a camera to start with please
+
+    def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
+        super(MainScreen, self).keyPressEvent(event)
+        key = event.key()
+        if key == QtCore.Qt.Key_Escape:
+            log.debug("Keyboard Escape pressed")
+            self.ButtonControl.escape()
+        elif key == QtCore.Qt.Key_Return:
+            log.debug("Keyboard Enter pressed")
+            self.ButtonControl.ButtonEnter()
 
     def debug(self):
         temp = ViscaIPCamera("LaurieC3","192.168.0.68","DC:ED:84:A1:9A:77",simple_visca=True, port=1259)
         temp.initialise()
-        self.cameras["LaurieC3"] = temp
-        self.cameraListWidget.addItem(QListWidgetItem("LaurieC3"))
+        self.cameras["LaurieC3 [192.168.0.68]"] = temp
+        self.cameraListWidget.addItem(QListWidgetItem("LaurieC3 [192.168.0.68]"))
+        self.cameras["LaurieC3 [TEST]"] = temp
+        self.cameraListWidget.addItem(QListWidgetItem("LaurieC3 [TEST]"))
         # self.cameras = {"CAM1 (10.0.1.20) [SONY]": None,
         #                 "CAM2 - LAURIE (192.168.0.68) [CHINESE]": temp,
         #                 "CAM3 WOWEE (10.0.1.199)": None,
         #                 "CAM4 TROTT (10.0.1.25)": None}
         # for camName in self.cameras:
         #     self.cameraListWidget.addItem(QListWidgetItem(camName))
-        self.pinger.setCameras(self.cameras)
 
     def popup(self, message,length=800):
         self.infoPopup.setText(message)
@@ -382,7 +143,7 @@ class MainScreen(QMainWindow):
         elif len(data)==2:
             getattr(getattr(self, data[0]), data[1])()
         else:
-            print("Invalid UISignal:",data)
+            log.error("Invalid UISignal:",data)
 
     def drawCameraPos(self):
         self.camPosRect #todo: do something with this
@@ -395,9 +156,11 @@ class MainScreen(QMainWindow):
             cameraItem = c[0]
             if status<=0:
                 cameraItem.setForeground(QtGui.QBrush(QtCore.Qt.red))
-            #print("Ping camera callback:",camera,"status",status)
+            else:
+                cameraItem.setForeground(QtGui.QBrush(QtCore.Qt.black))
+            log.log(0,"Ping camera callback:",camera,"status",status)
         else:
-            print("[PingCallback] Unable to find camera")
+            log.warning("[PingCallback] Unable to find camera")
 
     def doCameraCommand(self, command, **kwargs):
         """Perform a camera action on the active camera handling errors and removing disconnected cameras."""
@@ -412,16 +175,27 @@ class MainScreen(QMainWindow):
         else:
             self.selectedCamera.queueCommands(Command(command, **kwargs), override=False)
 
+    def getManualCamerasFromdb(self):
+        """Get camera objects from DB data"""
+        rows = database.query("SELECT * FROM cameras WHERE autocreated = 0")
+        extras = []
+        for row in rows:
+            if row["type"] == "sony":
+                extras.append(ViscaIPCamera(row["name"], row["ip"], None))
+            else:
+                extras.append(ViscaIPCamera(row["name"], row["ip"], None, port=1259, simple_visca=True))
+        log.info("Found %d extra cameras (from db)", len(extras))
+        return extras
+
     def discoverCameras(self):
         #todo close socket connections (and stop any cameras moving)
-        self.cameras = {} # todo: remember lost cameras?
         #todo move this crap to a thread
         self.infoPopup.setText("Searching...")
         self.infoPopup.show()
         updateUI()
-        print("Searching for cameras")
+        log.info("Searching for cameras")
         found = ViscaIPCamera.discoverCameras()
-        print("Found", len(found),"cameras")
+        log.info("Found %d cameras", len(found))
         updateUI()
         self.infoPopup.setText("Found "+str(len(found))+" cameras") #todo make this popup appear for a second or something
         updateUI()
@@ -429,18 +203,45 @@ class MainScreen(QMainWindow):
 
         if found:
             for cam in found:
-                camName = cam.name + " (" + cam.ip + ")"
-                #todo: don't reinialise new cameras
-                try:
-                    cam.initialise()
-                except socket.timeout:
-                    # probably camera is on a different network
-                    print("Failed to initialise camera",camName)
-                print("Adding '",camName,"'")
-                self.cameras[camName] = cam
-                self.cameraListWidget.addItem(QListWidgetItem(camName))
+                # database fun
+                row = database.query("SELECT * FROM cameras WHERE mac = ?", (cam.mac,), one=True)
+                if row:
+                    # update it
+                    log.debug("Updating camera[%s,%s] to database",cam.name, cam.ip)
+                    database.query(
+                        "UPDATE cameras SET name = ?, type = ?, ip = ?, autocreated = 1 WHERE mac = ?",
+                        (cam.name, "sony", cam.ip, cam.mac),
+                    )
+                    # Set the display name of the camera if set in db
+                    if row["display_name"]:
+                        cam.name = row["display_name"]
+                else:
+                    # Create it
+                    log.debug("Adding new camera[%s,%s] to database", cam.name, cam.ip)
+                    database.query(
+                        "INSERT INTO cameras (name, ip, type, mac, autocreated) VALUES (?, ?, ?, ?, 1)",
+                        (cam.name, cam.ip, "sony", cam.mac),
+                    )
+                database.commit()
 
-        self.pinger.setCameras(self.cameras)
+        found += self.getManualCamerasFromdb()
+        database.close()
+
+        known_ips = [c.ip for c in self.cameras.items()] # old list of ips
+        self.cameras.clear()  # do NOT re-initialise as we've passed a reference to other bits
+
+        if found:
+            for cam in found:
+                if cam.ip not in known_ips:
+                    try:
+                        cam.initialise()
+                    except socket.timeout:
+                        # probably camera is on a different network
+                        log.warning("Failed to initialise camera %s",str(cam))
+                log.info("Adding '%s'",str(cam))
+                self.cameras[str(cam)] = cam
+                self.cameraListWidget.addItem(QListWidgetItem(str(cam)))
+
 
     def changeSelectedCamera(self):
         if self.selectedCamera and self.selectedCamera.is_connected:
@@ -448,16 +249,19 @@ class MainScreen(QMainWindow):
             self.selectedCamera.queueCommands(Command(Command.PanTiltStop()), Command(Command.ZoomStop), Command(Command.FocusStop), override=True)
 
         cameraName = self.cameraListWidget.currentItem().text()
-        print("Selected camera changed to",cameraName)
+        log.info("Selected camera changed to %s",cameraName)
         self.labelInfo.setText(cameraName)
-        self.selectedCamera = self.cameras[cameraName]
-        self.selectedCameraName = cameraName
+        try:
+            self.selectedCamera = self.cameras[cameraName]
+            self.selectedCameraName = cameraName
+        except KeyError:
+            log.warning("Tried to switch camera to a non-existent camera; has it been deleted?")
 
         #todo update positions frame stuff
 
     def nextCamera(self, increment=1):
         # increment allows for going backwards (-1) and other funky things
-        print("Next camera")
+        log.info("Next camera")
         current = self.cameraListWidget.currentItem()
         cameraList = list(self.cameras)
         if not cameraList:
@@ -472,18 +276,18 @@ class MainScreen(QMainWindow):
 
     def storePreset(self):
         def confirm(num):
-            if num.strip() != "":
+            if num and num.strip() != "":
                 num = int(num)
                 self.popup("Storing Preset "+str(num))
                 self.doCameraCommand(Command(Command.MemorySet(num)))
-        self.ButtonControl.input("  ","Store Preset:",confirm)
+        self.ButtonControl.input("","Store Preset:",confirm)
     def recallPreset(self):
         def confirm(num):
-            if num.strip() != "":
+            if num and num.strip() != "":
                 num = int(num)
                 self.popup("Recalling Preset "+str(num))
                 self.doCameraCommand(Command(Command.MemoryRecall(num)))
-        self.ButtonControl.input("  ","Recall Preset:",confirm)
+        self.ButtonControl.input("","Recall Preset:",confirm)
 
     def isCameraAutoFocus(self):
         try:
@@ -497,7 +301,7 @@ class MainScreen(QMainWindow):
     def homeScreen(self):
         self.labelTopLeft.setText("Discover Cameras")
         self.labelMidLeft.setText("Camera Config")
-        self.labelBottomLeft.setText("Network/Pi Config")
+        self.labelBottomLeft.setText("Settings")
         self.labelCenterLeft.setText("Recall Preset")
         self.labelCenterMid.setText("Store Preset")
         if self.isCameraAutoFocus():
@@ -560,7 +364,7 @@ class MainScreen(QMainWindow):
     def cameraConfigScreen(self):
         self.labelTopLeft.setText("Discover Cameras")
         self.labelMidLeft.setText("Home Screen")
-        self.labelBottomLeft.setText("Network/Pi Config")
+        self.labelBottomLeft.setText("Settings")
         self.labelCenterLeft.setText("Recall Preset")
         self.labelCenterMid.setText("Store Preset")
         self.labelCenterRight.setText("Home Camera")
@@ -587,7 +391,7 @@ class MainScreen(QMainWindow):
                     return
                 #todo: validate?
                 #todo set the IP and subnet
-                print("Changing camera IP/sub",self.selectedCameraName,"to",self._tempIPAddress,"/",newSubnet)
+                log.info("Changing camera IP/sub",self.selectedCameraName,"to",self._tempIPAddress,"/",newSubnet)
                 self.selectedCamera.setIP(ip=self._tempIPAddress, netmask=newSubnet)
             def setIP(newip_):
                 if newip_==None:
@@ -608,14 +412,16 @@ class MainScreen(QMainWindow):
             self.ButtonControl.input(padIPAddress(self.selectedCamera.ip),"Camera IP",setIP)
 
         def changeName():
-            #todo get old name
-            def setName(newName):
-                if newName==None or newName=="":
-                    self.popup("Canceled",500)
-                    return
-                # todo set name
-                print("Changing camera name", self.selectedCamera.name, "to",newName)
-            self.ButtonControl.input(self.selectedCamera.name,"Camera Name",setName)
+            if self.selectedCamera:
+                def setName(newName):
+                    if newName==None or newName=="":
+                        self.popup("Canceled",500)
+                        return
+                    # todo set name
+                    log.info("Changing camera name", self.selectedCamera.name, "to",newName)
+                self.ButtonControl.input(self.selectedCamera.name,"Camera Name",setName)
+            else:
+                self.popup("No camera selected!")
 
         self.ButtonControl.connectFunctions({
             "TopLeft": lambda: self.discoverCameras(),
@@ -638,10 +444,10 @@ class MainScreen(QMainWindow):
         self.labelCenterLeft.setText("Recall Preset")
         self.labelCenterMid.setText("Store Preset")
         self.labelCenterRight.setText("")
-        self.labelBottomRight.setText("")
+        self.labelBottomRight.setText("Set Ras-Pi IP")
         self.labelMidRight.setText("")
-        self.labelTopRight.setText("Set Ras-Pi IP")
-        self.labelCurrentScreen.setText("Ras-Pi Network Config")
+        self.labelTopRight.setText("Add Manual Camera")
+        self.labelCurrentScreen.setText("Settings")
 
         self.textView.show()
 
@@ -686,7 +492,7 @@ class MainScreen(QMainWindow):
                     return
                 #todo: validate?
                 #todo set the IP and subnet
-                print("Changing raspberry pi IP/sub","...","to","TODO","/",newSubnet)
+                log.info("Changing raspberry pi IP/sub","...","to","TODO","/",newSubnet)
             def setIP(newip_):
                 if newip_==None:
                     self.popup("Canceled",500)
@@ -704,11 +510,51 @@ class MainScreen(QMainWindow):
                     return
             self.ButtonControl.input("010.000.001.123","RasPi IP",setIP)
 
+        def addCamera():
+            def setName(newName):
+                if newName == None or newName == "":
+                    self.popup("Canceled", 500)
+                    return
+
+                def setIP(newip_):
+                    if newip_ == None:
+                        self.popup("Canceled", 500)
+                        return
+                    try:
+                        socket.inet_aton(newip_)
+
+                        # search for the mac address (and the device itself)
+                        # hopefully it responds to arp
+                        mac = get_mac_address(ip=newip_)
+
+                        if not mac:
+                            self.popup("Failed to find device on network")
+                        else:
+                            # todo determine the type of camera
+                            log.debug("Adding new camera: %s[%s,%s]", newName, newip_,mac)
+                            cam = ViscaIPCamera(newName, ip, mac)
+                            self.cameras[str(cam)] = cam
+                            self.cameraListWidget.addItem(QListWidgetItem(str(cam)))
+                            log.debug("Adding new camera[%s,%s,%s] to database", newName, newip_,mac)
+                            database.query(
+                                "INSERT INTO cameras (name, ip, type, mac, autocreated) VALUES (?, ?, ?, ?, 0)",
+                                (newName, newip_, "chinese", mac),
+                            )
+
+                    except socket.error:
+                        self.popup("Invalid IP Address!")
+                        return
+
+                self.ButtonControl.input("", "Camera IP", setIP)
+
+            self.ButtonControl.input("", "Camera Name", setName)
+
         self.ButtonControl.connectFunctions({
             "TopLeft": lambda: self.discoverCameras(),
             "MidLeft": lambda: self.cameraConfigScreen(),
             "BottomLeft": lambda: self.homeScreen(),
-            "TopRight": lambda: changeIP(),
+            "BottomRight": lambda: changeIP(),
+            "TopRight": lambda: addCamera(),
             "CenterLeft": lambda: self.recallPreset(),
             "CenterMid": lambda: self.storePreset(),
             "Next": lambda: self.nextCamera(),
@@ -716,14 +562,14 @@ class MainScreen(QMainWindow):
         })
 
     def closeEvent(self, a0: QtGui.QCloseEvent) -> None:
-        print("Closing serial threads...")
+        log.info("Closing serial threads...")
         self.serial.stop()
-        print("Stopping camera pinger")
+        log.info("Stopping camera pinger")
         self.pinger.stop()
         log.info("Stopping cameras")
         for camName, cam in self.cameras.items():
             cam.close()
-        print("Exiting")
+        log.info("Exiting")
         a0.accept()
 
 if __name__ == '__main__':

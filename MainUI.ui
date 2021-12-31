@@ -1,30 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
+ <author>Laurie Kirkcaldy</author>
  <class>Form</class>
  <widget class="QWidget" name="Form">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>817</width>
-    <height>538</height>
+    <width>931</width>
+    <height>641</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true"/>
+  </property>
   <widget class="QLabel" name="labelTopLeft">
    <property name="geometry">
     <rect>
-     <x>90</x>
-     <y>60</y>
-     <width>124</width>
-     <height>84</height>
+     <x>70</x>
+     <y>0</y>
+     <width>171</width>
+     <height>157</height>
     </rect>
    </property>
    <property name="font">
     <font>
-     <pointsize>14</pointsize>
+     <pointsize>20</pointsize>
     </font>
    </property>
    <property name="frameShape">
@@ -43,15 +47,15 @@
   <widget class="QLabel" name="labelMidLeft">
    <property name="geometry">
     <rect>
-     <x>90</x>
-     <y>140</y>
-     <width>124</width>
-     <height>84</height>
+     <x>70</x>
+     <y>153</y>
+     <width>171</width>
+     <height>159</height>
     </rect>
    </property>
    <property name="font">
     <font>
-     <pointsize>14</pointsize>
+     <pointsize>20</pointsize>
     </font>
    </property>
    <property name="frameShape">
@@ -70,15 +74,15 @@
   <widget class="QLabel" name="labelBottomLeft">
    <property name="geometry">
     <rect>
-     <x>90</x>
-     <y>220</y>
-     <width>124</width>
-     <height>84</height>
+     <x>70</x>
+     <y>308</y>
+     <width>171</width>
+     <height>156</height>
     </rect>
    </property>
    <property name="font">
     <font>
-     <pointsize>14</pointsize>
+     <pointsize>20</pointsize>
     </font>
    </property>
    <property name="frameShape">
@@ -97,15 +101,15 @@
   <widget class="QLabel" name="labelCenterLeft">
    <property name="geometry">
     <rect>
-     <x>210</x>
-     <y>220</y>
-     <width>124</width>
-     <height>84</height>
+     <x>237</x>
+     <y>353</y>
+     <width>169</width>
+     <height>111</height>
     </rect>
    </property>
    <property name="font">
     <font>
-     <pointsize>14</pointsize>
+     <pointsize>20</pointsize>
     </font>
    </property>
    <property name="frameShape">
@@ -127,15 +131,15 @@
   <widget class="QLabel" name="labelCenterMid">
    <property name="geometry">
     <rect>
-     <x>330</x>
-     <y>220</y>
-     <width>124</width>
-     <height>84</height>
+     <x>402</x>
+     <y>353</y>
+     <width>170</width>
+     <height>111</height>
     </rect>
    </property>
    <property name="font">
     <font>
-     <pointsize>14</pointsize>
+     <pointsize>20</pointsize>
     </font>
    </property>
    <property name="frameShape">
@@ -157,15 +161,15 @@
   <widget class="QLabel" name="labelBottomRight">
    <property name="geometry">
     <rect>
-     <x>570</x>
-     <y>220</y>
-     <width>124</width>
-     <height>84</height>
+     <x>733</x>
+     <y>308</y>
+     <width>171</width>
+     <height>156</height>
     </rect>
    </property>
    <property name="font">
     <font>
-     <pointsize>14</pointsize>
+     <pointsize>20</pointsize>
     </font>
    </property>
    <property name="frameShape">
@@ -187,15 +191,15 @@
   <widget class="QLabel" name="labelMidRight">
    <property name="geometry">
     <rect>
-     <x>570</x>
-     <y>140</y>
-     <width>124</width>
-     <height>84</height>
+     <x>733</x>
+     <y>153</y>
+     <width>171</width>
+     <height>159</height>
     </rect>
    </property>
    <property name="font">
     <font>
-     <pointsize>14</pointsize>
+     <pointsize>20</pointsize>
     </font>
    </property>
    <property name="frameShape">
@@ -217,15 +221,15 @@
   <widget class="QLabel" name="labelTopRight">
    <property name="geometry">
     <rect>
-     <x>570</x>
-     <y>60</y>
-     <width>124</width>
-     <height>84</height>
+     <x>733</x>
+     <y>0</y>
+     <width>171</width>
+     <height>157</height>
     </rect>
    </property>
    <property name="font">
     <font>
-     <pointsize>14</pointsize>
+     <pointsize>20</pointsize>
     </font>
    </property>
    <property name="frameShape">
@@ -247,15 +251,15 @@
   <widget class="QLabel" name="labelCenterRight">
    <property name="geometry">
     <rect>
-     <x>450</x>
-     <y>220</y>
-     <width>124</width>
-     <height>84</height>
+     <x>568</x>
+     <y>353</y>
+     <width>169</width>
+     <height>111</height>
     </rect>
    </property>
    <property name="font">
     <font>
-     <pointsize>14</pointsize>
+     <pointsize>20</pointsize>
     </font>
    </property>
    <property name="frameShape">
@@ -277,11 +281,16 @@
   <widget class="QLabel" name="labelCurrentScreen">
    <property name="geometry">
     <rect>
-     <x>210</x>
-     <y>60</y>
-     <width>121</width>
-     <height>31</height>
+     <x>240</x>
+     <y>0</y>
+     <width>161</width>
+     <height>41</height>
     </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>16</pointsize>
+    </font>
    </property>
    <property name="frameShape">
     <enum>QFrame::Box</enum>
@@ -296,11 +305,16 @@
   <widget class="QLabel" name="labelInfo">
    <property name="geometry">
     <rect>
-     <x>330</x>
-     <y>60</y>
-     <width>241</width>
-     <height>31</height>
+     <x>430</x>
+     <y>0</y>
+     <width>306</width>
+     <height>41</height>
     </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>16</pointsize>
+    </font>
    </property>
    <property name="frameShape">
     <enum>QFrame::Box</enum>
@@ -309,7 +323,7 @@
     <number>2</number>
    </property>
    <property name="text">
-    <string>Info</string>
+    <string>No Selection</string>
    </property>
    <property name="alignment">
     <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -318,11 +332,16 @@
   <widget class="QListWidget" name="cameraListWidget">
    <property name="geometry">
     <rect>
-     <x>210</x>
-     <y>90</y>
-     <width>181</width>
-     <height>131</height>
+     <x>240</x>
+     <y>40</y>
+     <width>231</width>
+     <height>315</height>
     </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>14</pointsize>
+    </font>
    </property>
    <property name="styleSheet">
     <string notr="true">QListView::item:selected:!active {
@@ -333,6 +352,10 @@
 QListView::item:selected:active {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
                                 stop: 0 #6a6ea9, stop: 1 #888dd9);
+}
+
+QListView::item[pingError=&quot;true&quot;] {
+    color: red
 }</string>
    </property>
    <property name="isWrapping" stdset="0">
@@ -345,10 +368,10 @@ QListView::item:selected:active {
   <widget class="QFrame" name="camPosFrame">
    <property name="geometry">
     <rect>
-     <x>390</x>
-     <y>90</y>
-     <width>181</width>
-     <height>131</height>
+     <x>470</x>
+     <y>40</y>
+     <width>261</width>
+     <height>311</height>
     </rect>
    </property>
    <property name="frameShape">
@@ -361,8 +384,8 @@ QListView::item:selected:active {
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>90</y>
-      <width>80</width>
+      <y>150</y>
+      <width>131</width>
       <height>16</height>
      </rect>
     </property>
@@ -373,10 +396,10 @@ QListView::item:selected:active {
    <widget class="QSlider" name="verticalSlider">
     <property name="geometry">
      <rect>
-      <x>90</x>
+      <x>150</x>
       <y>10</y>
       <width>16</width>
-      <height>80</height>
+      <height>131</height>
      </rect>
     </property>
     <property name="orientation">
@@ -386,7 +409,7 @@ QListView::item:selected:active {
    <widget class="QSlider" name="verticalSlider_2">
     <property name="geometry">
      <rect>
-      <x>120</x>
+      <x>190</x>
       <y>10</y>
       <width>16</width>
       <height>111</height>
@@ -399,7 +422,7 @@ QListView::item:selected:active {
    <widget class="QSlider" name="verticalSlider_3">
     <property name="geometry">
      <rect>
-      <x>150</x>
+      <x>230</x>
       <y>10</y>
       <width>16</width>
       <height>111</height>
@@ -414,8 +437,8 @@ QListView::item:selected:active {
      <rect>
       <x>10</x>
       <y>10</y>
-      <width>81</width>
-      <height>71</height>
+      <width>130</width>
+      <height>130</height>
      </rect>
     </property>
     <property name="verticalScrollBarPolicy">
@@ -428,8 +451,8 @@ QListView::item:selected:active {
    <widget class="QLabel" name="label">
     <property name="geometry">
      <rect>
-      <x>112</x>
-      <y>115</y>
+      <x>180</x>
+      <y>120</y>
       <width>31</width>
       <height>16</height>
      </rect>
@@ -444,8 +467,8 @@ QListView::item:selected:active {
    <widget class="QLabel" name="label_2">
     <property name="geometry">
      <rect>
-      <x>143</x>
-      <y>115</y>
+      <x>220</x>
+      <y>120</y>
       <width>31</width>
       <height>16</height>
      </rect>
@@ -460,8 +483,8 @@ QListView::item:selected:active {
    <widget class="QLabel" name="label_3">
     <property name="geometry">
      <rect>
-      <x>40</x>
-      <y>100</y>
+      <x>60</x>
+      <y>160</y>
       <width>31</width>
       <height>16</height>
      </rect>
@@ -476,8 +499,8 @@ QListView::item:selected:active {
    <widget class="QLabel" name="label_4">
     <property name="geometry">
      <rect>
-      <x>100</x>
-      <y>40</y>
+      <x>170</x>
+      <y>60</y>
       <width>16</width>
       <height>16</height>
      </rect>
@@ -490,43 +513,15 @@ QListView::item:selected:active {
     </property>
    </widget>
   </widget>
-  <widget class="QProgressBar" name="progressBar">
-   <property name="geometry">
-    <rect>
-     <x>370</x>
-     <y>326</y>
-     <width>118</width>
-     <height>10</height>
-    </rect>
-   </property>
-   <property name="styleSheet">
-    <string notr="true">QProgressBar::chunk {
-     background-color: #3add36;
-     width: 1px;
- }
-
- QProgressBar {
-     border: 2px solid grey;
-     border-radius: 0px;
-     text-align: center;
- }</string>
-   </property>
-   <property name="value">
-    <number>24</number>
-   </property>
-   <property name="textVisible">
-    <bool>false</bool>
-   </property>
-  </widget>
   <widget class="QLabel" name="infoPopup">
    <property name="enabled">
     <bool>true</bool>
    </property>
    <property name="geometry">
     <rect>
-     <x>270</x>
-     <y>120</y>
-     <width>241</width>
+     <x>290</x>
+     <y>170</y>
+     <width>411</width>
      <height>61</height>
     </rect>
    </property>
@@ -557,8 +552,8 @@ QListView::item:selected:active {
   <widget class="QPushButton" name="buttonPrev">
    <property name="geometry">
     <rect>
-     <x>260</x>
-     <y>360</y>
+     <x>370</x>
+     <y>530</y>
      <width>101</width>
      <height>61</height>
     </rect>
@@ -570,8 +565,8 @@ QListView::item:selected:active {
   <widget class="QPushButton" name="buttonNext">
    <property name="geometry">
     <rect>
-     <x>430</x>
-     <y>360</y>
+     <x>480</x>
+     <y>530</y>
      <width>101</width>
      <height>61</height>
     </rect>
@@ -583,8 +578,8 @@ QListView::item:selected:active {
   <widget class="QFrame" name="typingFrame">
    <property name="geometry">
     <rect>
-     <x>220</x>
-     <y>95</y>
+     <x>300</x>
+     <y>30</y>
      <width>341</width>
      <height>121</height>
     </rect>
@@ -641,8 +636,8 @@ QListView::item:selected:active {
   <widget class="QGroupBox" name="groupBox">
    <property name="geometry">
     <rect>
-     <x>60</x>
-     <y>320</y>
+     <x>240</x>
+     <y>490</y>
      <width>91</width>
      <height>131</height>
     </rect>
@@ -810,8 +805,8 @@ QListView::item:selected:active {
   <widget class="QFrame" name="detailedPopup">
    <property name="geometry">
     <rect>
-     <x>220</x>
-     <y>70</y>
+     <x>310</x>
+     <y>110</y>
      <width>341</width>
      <height>171</height>
     </rect>
@@ -839,7 +834,7 @@ QListView::item:selected:active {
     </property>
     <property name="font">
      <font>
-      <pointsize>14</pointsize>
+      <pointsize>20</pointsize>
      </font>
     </property>
     <property name="text">
@@ -866,7 +861,7 @@ QListView::item:selected:active {
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>12</pointsize>
      </font>
     </property>
     <property name="text">
@@ -886,11 +881,16 @@ QListView::item:selected:active {
   <widget class="QTextEdit" name="textView">
    <property name="geometry">
     <rect>
-     <x>390</x>
-     <y>90</y>
-     <width>181</width>
-     <height>131</height>
+     <x>470</x>
+     <y>40</y>
+     <width>265</width>
+     <height>315</height>
     </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>12</pointsize>
+    </font>
    </property>
    <property name="readOnly">
     <bool>true</bool>
@@ -899,11 +899,16 @@ QListView::item:selected:active {
   <widget class="QLabel" name="ticker">
    <property name="geometry">
     <rect>
-     <x>310</x>
-     <y>60</y>
-     <width>21</width>
-     <height>31</height>
+     <x>400</x>
+     <y>0</y>
+     <width>31</width>
+     <height>41</height>
     </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>16</pointsize>
+    </font>
    </property>
    <property name="frameShape">
     <enum>QFrame::Box</enum>
@@ -929,7 +934,6 @@ QListView::item:selected:active {
   <zorder>labelCenterRight</zorder>
   <zorder>labelInfo</zorder>
   <zorder>camPosFrame</zorder>
-  <zorder>progressBar</zorder>
   <zorder>buttonPrev</zorder>
   <zorder>buttonNext</zorder>
   <zorder>groupBox</zorder>
