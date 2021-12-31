@@ -1,26 +1,38 @@
+import os
 import socket
+import subprocess
 import sys
 import time
 import re
 import traceback
+import logging
 
 import serial
-from PyQt5 import QtCore, QtWidgets
+from PyQt5 import QtCore, QtWidgets, QtGui
 from PyQt5.QtCore import pyqtSignal, QObject, QThread, QTimer
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QApplication, QLabel, QGridLayout, QWidget, QPushButton, QGraphicsScene, QGraphicsRectItem, QListWidgetItem, QMainWindow
 from PyQt5.uic import loadUi
 
-from visca_ip_camera import ViscaIPCamera
-from visca_commands import Commands
+from sony_visca.visca_ip_camera import ViscaIPCamera
+from sony_visca.visca_commands import Command
+from SerialControl import SerialControl
 
-SERIAL_PORT = "COM7"
+log = logging.getLogger("PiControl")
+logging.basicConfig(level=logging.DEBUG)
 
-serialRegex = re.compile(r"(?P<command>[A-Z]+)(?P<num0>-?[0-9]+)?(,(?P<num1>-?[0-9]+)(,(?P<num2>-?[0-9]+),(?P<num3>-?[0-9]+),(?P<num4>-?[0-9]+),(?P<num5>-?[0-9]+)(,(?P<num6>-?[0-9]+),(?P<num7>-?[0-9]+),(?P<num8>-?[0-9]+))?)?)?")
+multipleSpaceRegex = re.compile(r" {2,}")
 
 def updateUI():
     QtWidgets.qApp.processEvents()
     QtWidgets.qApp.processEvents() # yes this is twice...
+
+def padIPAddress(ip):
+    octets = ip.split(".")
+    if len(octets) != 4:
+        raise ValueError("Invalid IP Address!")
+    nOctets = [int(x) for x in octets]
+    return "{:03d}.{:03d}.{:03d}.{:03d}".format(nOctets[0],nOctets[1],nOctets[2],nOctets[3])
 
 class ButtonControl(QObject):
     functionDict = {} # a way of dynamically changing what the buttons do in a nice-ish way
@@ -155,7 +167,7 @@ class ButtonControl(QObject):
     def ButtonClear(self,event=None):
         self.backspace()
     def ButtonEnter(self, event=None):
-        retStr = self.typingString
+        retStr = self.UI.typingInput.text()
         self.typingOff()
         # validity should be checked in the callback
         # as well as any feedback to the user
@@ -221,106 +233,62 @@ class ButtonControl(QObject):
         if press:
             buttonMap[num]()
 
-class SerialControl(QThread):
-    buttonPressSignal = pyqtSignal(int)
-    buttonReleaseSignal = pyqtSignal(int)
-    uiSignal = pyqtSignal(list)
 
-    port = None
-    learning = False
 
-    def initPort(self):
-        try:
-            self.port = serial.Serial(SERIAL_PORT, 115200)
+class CameraPinger(QThread):
+    cameraUpdate = pyqtSignal(tuple) # (name, status)
+    cameras = {}
+    cameraList = []
+    index = 0
+    _isRunning=True
 
-            self.port.write(b'HELLO\n')
-        except serial.SerialException:
-            print("Failed to open serial port")
-    def __init__(self):
+    def __init__(self, ticker=None):
         QThread.__init__(self)
-        self.initPort()
+        self.setTerminationEnabled(True)
+        self.ticker = ticker # UI element to see if it's still working
     def __del__(self):
-        self.port.close()
+        pass
+
+    def setCameras(self,cameras):
+        self.cameras = cameras
+        self.cameraList = list(cameras)
+        self.index = 0
+
+    def stop(self):
+        self._isRunning=False
+        self.quit()
         self.wait()
+        self.deleteLater()
 
     def run(self):
-        print("Serial Thread started")
-        if not self.port or not self.port.is_open:
-            print("Serial port not found, aborting external control")
-            return
-        while True:
-            try:
-                while True:
-                    data = self.port.readline().decode("utf-8").strip()
-                    dataSplit = serialRegex.search(data)
-                    print("Serial data:",data)
-                    command = dataSplit["command"]
-                    try:
-                        if command=="X":
-                            x = int(dataSplit["num0"])
-                            print("X position",x)
-                        elif command=="Y":
-                            y = int(dataSplit["num0"])
-                            print("Y position",y)
-                        elif command=="Z":
-                            z = int(dataSplit["num0"])
-                            print("Z position",z)
-                        elif command=="P":
-                            button = int(dataSplit["num0"])*8 + int(dataSplit["num1"])
-                            print("Button Press",button)
-                            self.buttonPressSignal.emit(button)
-                        elif command=="R":
-                            button = int(dataSplit["num0"]) * 8 + int(dataSplit["num1"])
-                            print("Button Release",button)
-                        elif command=="BOOT":
-                            restX = int(dataSplit["num0"])
-                            restY = int(dataSplit["num1"])
-                            restZ = int(dataSplit["num2"])
-                            stepX = int(dataSplit["num3"])
-                            stepY = int(dataSplit["num4"])
-                            stepZ = int(dataSplit["num5"])
-                            print("uC is Booting",restX,restY,restZ,stepX,stepY,stepZ)
-                        elif command=="LRN":
-                            rawX = int(dataSplit["num0"])
-                            rawY = int(dataSplit["num1"])
-                            rawZ = int(dataSplit["num2"])
-                            minX = int(dataSplit["num3"])
-                            minY = int(dataSplit["num4"])
-                            minZ = int(dataSplit["num5"])
-                            maxX = int(dataSplit["num6"])
-                            maxY = int(dataSplit["num7"])
-                            maxZ = int(dataSplit["num8"])
-                            print("Learning mode",data)
-                            self.uiSignal.emit(["detailedPopupDetails","setText","X:%d Y:%d Z:%d\nminX:%d minY:%d minZ:%d\nmaxX:%d maxY:%d maxZ:%d"%(rawX,rawY,rawZ,minX,minY,minZ,maxX,maxY,maxZ)])
-                            if not self.learning:
-                                self.learning = True
-                                self.uiSignal.emit(["detailedPopupTitle","setText","Joystick Calibration: Move the joystick to all maximum limits, center to home and then press continue"])
-                                self.uiSignal.emit(["detailedPopup","show"])
-                        elif command=="HOME":
-                            print("Learning home")
-                            self.uiSignal.emit(["detailedPopupDetails", "setText", "Learning Home Position..."])
-                        elif command=="FIN":
-                            restX = int(dataSplit["num0"])
-                            restY = int(dataSplit["num1"])
-                            restZ = int(dataSplit["num2"])
-                            stepX = int(dataSplit["num3"])
-                            stepY = int(dataSplit["num4"])
-                            stepZ = int(dataSplit["num5"])
-                            print("Learning finished",restX,restY,restZ,stepX,stepY,stepZ)
-                            self.learning = False
-                            self.uiSignal.emit(["detailedPopup","hide"])
-                            self.uiSignal.emit(["popup","Cal Done!"])
-                        else:
-                            print("Unknown serial data:",data)
-                    except IndexError:
-                        print("Index error in decode")
+        print("Camera pinger Thread started")
+        while self._isRunning:
+            if len(self.cameraList)>0:
+                #todo do the ping / camera check
+                camera = self.cameras[self.cameraList[self.index]]
+                cameraName = self.cameraList[self.index]
+                #ip = camera.ip
+                #DEBUG:
+                ip = cameraName[cameraName.index("(")+1:cameraName.index(")")]
 
-            except:
-                print("Ahhh EXCEPPPTIONN")
-                print(traceback.format_exc())
-                self.port.close()
-                self.initPort()
+                if os.name=="nt":
+                    response = subprocess.call(["ping", "-n", "1", "-w", "500", ip], stdout=subprocess.DEVNULL)
+                else:
+                    response = subprocess.call(["ping", "-c", "1", "-i", "0.5", ip], stdout=subprocess.DEVNULL)
 
+                if response==0:
+                    self.cameraUpdate.emit((cameraName, 1))
+                else:
+                    self.cameraUpdate.emit((cameraName, -1))
+
+                self.index+=1
+                if self.index>=len(self.cameraList):
+                    self.index = 0
+                if self.ticker:
+                    self.ticker.setText(str(self.index))
+            QtWidgets.qApp.processEvents()
+
+            QThread.msleep(500)
 
 class MainScreen(QMainWindow):
     uiUpdateTrigger = pyqtSignal(list) # for arbitrary UI updates from other threads (filthy!)
@@ -328,6 +296,7 @@ class MainScreen(QMainWindow):
     def __init__(self):
         super().__init__()
         self.selectedCamera = None
+        self.selectedCameraName = ""
         self.cameras = {}
 
         loadUi("MainUI.ui", self)
@@ -346,6 +315,7 @@ class MainScreen(QMainWindow):
         self.infoPopup.hide()
         self.typingFrame.hide()
         self.detailedPopup.hide()
+        self.textView.hide()
 
         self.cameraListWidget.currentItemChanged.connect(self.changeSelectedCamera)
 
@@ -354,26 +324,49 @@ class MainScreen(QMainWindow):
         self.serial = SerialControl()
         self.serial.uiSignal.connect(self.UISignalReceiver)
         self.serial.buttonPressSignal.connect(self.ButtonControl.decodeButton)
+        self.serial.cameraControl.connect(self.doCameraCommand)
         self.serial.start()
+
+        self.pinger = CameraPinger(self.ticker)
+        self.pinger.cameraUpdate.connect(self.pingCameraCallback)
+        # self.pinger.start()
 
         self.show()
 
         self.discoverCameras()
+        self.nextCamera() # select a camera to start with please
         self.debug()
 
     def debug(self):
-        self.cameras = {"CAM1 (10.0.1.20) [SONY]": None,
-                        "CAM2 - LAURIE (10.0.1.999) [CHINESE]": None,
-                        "CAM3 WOWEE (10.0.1.342)": None,
-                        "CAM4 TROTT (10.0.1.65)": None}
-        for camName in self.cameras:
-            self.cameraListWidget.addItem(QListWidgetItem(camName))
+        temp = ViscaIPCamera("LaurieC3","192.168.0.68","DC:ED:84:A1:9A:77",simple_visca=True, port=1259)
+        temp.initialise()
+        self.cameras["LaurieC3"] = temp
+        self.cameraListWidget.addItem(QListWidgetItem("LaurieC3"))
+        # self.cameras = {"CAM1 (10.0.1.20) [SONY]": None,
+        #                 "CAM2 - LAURIE (192.168.0.68) [CHINESE]": temp,
+        #                 "CAM3 WOWEE (10.0.1.199)": None,
+        #                 "CAM4 TROTT (10.0.1.25)": None}
+        # for camName in self.cameras:
+        #     self.cameraListWidget.addItem(QListWidgetItem(camName))
+        self.pinger.setCameras(self.cameras)
 
     def popup(self, message,length=800):
         self.infoPopup.setText(message)
         self.infoPopup.show()
         updateUI()
         QTimer.singleShot(length,self.infoPopup.hide)
+
+    def dialogBox(self,title, enterFunc, cancelFunc=None):
+        # I use the input box as I can't be bothered to reconnect the enter and clear buttons
+        def onSubmit(s):
+            if s is not None:
+                if enterFunc:
+                    enterFunc()
+            else:
+                if cancelFunc:
+                    cancelFunc()
+        self.ButtonControl.input("",title,onSubmit)
+
 
     def UISignalReceiver(self, data):
         # for sending signals that can update arbitrary parts of the UI
@@ -395,6 +388,30 @@ class MainScreen(QMainWindow):
         self.camPosRect #todo: do something with this
         pass
 
+    def pingCameraCallback(self, params):
+        camera, status = params
+        c = self.cameraListWidget.findItems(camera,QtCore.Qt.MatchExactly)
+        if len(c)>0:
+            cameraItem = c[0]
+            if status<=0:
+                cameraItem.setForeground(QtGui.QBrush(QtCore.Qt.red))
+            #print("Ping camera callback:",camera,"status",status)
+        else:
+            print("[PingCallback] Unable to find camera")
+
+    def doCameraCommand(self, command, **kwargs):
+        """Perform a camera action on the active camera handling errors and removing disconnected cameras."""
+        if not self.selectedCamera:
+            log.warning("!! No cam active !!")
+            return
+        if not self.selectedCamera.is_connected:
+            log.warning("Skipping camera command, not connected!")
+            return
+        if isinstance(command, Command):
+            self.selectedCamera.queueCommands(command, override=False)
+        else:
+            self.selectedCamera.queueCommands(Command(command, **kwargs), override=False)
+
     def discoverCameras(self):
         #todo close socket connections (and stop any cameras moving)
         self.cameras = {} # todo: remember lost cameras?
@@ -412,51 +429,130 @@ class MainScreen(QMainWindow):
 
         if found:
             for cam in found:
+                camName = cam.name + " (" + cam.ip + ")"
                 #todo: don't reinialise new cameras
-                cam.initialise()
-                camName = cam.name+" ("+cam.ip+")"
+                try:
+                    cam.initialise()
+                except socket.timeout:
+                    # probably camera is on a different network
+                    print("Failed to initialise camera",camName)
                 print("Adding '",camName,"'")
                 self.cameras[camName] = cam
                 self.cameraListWidget.addItem(QListWidgetItem(camName))
 
-        # self.cameraListWidget.item(1).setForeground(QColor(255,0,0))
+        self.pinger.setCameras(self.cameras)
 
     def changeSelectedCamera(self):
+        if self.selectedCamera and self.selectedCamera.is_connected:
+            # todo: send all these on a different thread: or with new library and queueing it might be ok
+            self.selectedCamera.queueCommands(Command(Command.PanTiltStop()), Command(Command.ZoomStop), Command(Command.FocusStop), override=True)
+
         cameraName = self.cameraListWidget.currentItem().text()
         print("Selected camera changed to",cameraName)
         self.labelInfo.setText(cameraName)
         self.selectedCamera = self.cameras[cameraName]
+        self.selectedCameraName = cameraName
 
         #todo update positions frame stuff
-        #todo stop camera moving in any way if we were controlling it before switching
 
     def nextCamera(self, increment=1):
         # increment allows for going backwards (-1) and other funky things
+        print("Next camera")
         current = self.cameraListWidget.currentItem()
         cameraList = list(self.cameras)
+        if not cameraList:
+            return
         if current == None:
             next = cameraList[0]
         else:
             next = cameraList[(cameraList.index(current.text()) + increment) % len(cameraList)]
         nextItem = self.cameraListWidget.findItems(next,QtCore.Qt.MatchExactly)[0]
         self.cameraListWidget.setCurrentItem(nextItem)
+        # self.changeSelectedCamera() # this gets called by the UI?
+
+    def storePreset(self):
+        def confirm(num):
+            if num.strip() != "":
+                num = int(num)
+                self.popup("Storing Preset "+str(num))
+                self.doCameraCommand(Command(Command.MemorySet(num)))
+        self.ButtonControl.input("  ","Store Preset:",confirm)
+    def recallPreset(self):
+        def confirm(num):
+            if num.strip() != "":
+                num = int(num)
+                self.popup("Recalling Preset "+str(num))
+                self.doCameraCommand(Command(Command.MemoryRecall(num)))
+        self.ButtonControl.input("  ","Recall Preset:",confirm)
+
+    def isCameraAutoFocus(self):
+        try:
+            if self.selectedCamera.isAutoFocusEnabled:
+                return True
+            else:
+                return False
+        except AttributeError:
+            return True
 
     def homeScreen(self):
         self.labelTopLeft.setText("Discover Cameras")
         self.labelMidLeft.setText("Camera Config")
-        self.labelBottomLeft.setText("Network Config")
+        self.labelBottomLeft.setText("Network/Pi Config")
         self.labelCenterLeft.setText("Recall Preset")
         self.labelCenterMid.setText("Store Preset")
-        self.labelCenterRight.setText("")
-        self.labelBottomRight.setText("Focus Far")
-        self.labelMidRight.setText("Focus Near")
-        self.labelTopRight.setText("Auto/Manual Focus")
+        if self.isCameraAutoFocus():
+            self.labelCenterRight.setText("")
+            self.labelBottomRight.setText("")
+            self.labelMidRight.setText("")
+            self.labelTopRight.setText("Auto Focus")
+        else:
+            self.labelCenterRight.setText("Push Focus")
+            self.labelBottomRight.setText("Focus Far")
+            self.labelMidRight.setText("Focus Near")
+            self.labelTopRight.setText("Manual Focus")
         self.labelCurrentScreen.setText("Home")
+
+        self.textView.hide()
+
+        def toggleAutoFocus():
+            if self.isCameraAutoFocus():
+                log.info("Turning autofocus off")
+                self.selectedCamera.isAutoFocusEnabled = False
+                self.selectedCamera.queueCommands(Command(Command.ManualFocus))
+                self.labelCenterRight.setText("Push Focus")
+                self.labelBottomRight.setText("Focus Far")
+                self.labelMidRight.setText("Focus Near")
+                self.labelTopRight.setText("Manual Focus")
+            else:
+                log.info("Turning autofocus on")
+                self.selectedCamera.isAutoFocusEnabled = True
+                self.selectedCamera.queueCommands(Command(Command.AutoFocus))
+                self.labelCenterRight.setText("")
+                self.labelBottomRight.setText("")
+                self.labelMidRight.setText("")
+                self.labelTopRight.setText("Auto Focus")
+        def focusNear():
+            if not self.isCameraAutoFocus():
+                self.selectedCamera.queueCommands(Command(Command.FocusNear))
+                QTimer.singleShot(120, lambda:self.selectedCamera.queueCommands(Command(Command.FocusStop)))
+        def focusFar():
+            if not self.isCameraAutoFocus():
+                self.selectedCamera.queueCommands(Command(Command.FocusFar))
+                QTimer.singleShot(120, lambda: self.selectedCamera.queueCommands(Command(Command.FocusStop)))
+        def focusPush():
+            if not self.isCameraAutoFocus():
+                self.selectedCamera.queueCommands(Command(Command.FocusOnePush))
 
         self.ButtonControl.connectFunctions({
             "TopLeft": lambda: self.discoverCameras(),
             "MidLeft": lambda: self.cameraConfigScreen(),
             "BottomLeft": lambda: self.networkConfigScreen(),
+            "CenterLeft": lambda: self.recallPreset(),
+            "CenterMid": lambda: self.storePreset(),
+            "CenterRight": lambda: focusPush(),
+            "BottomRight": lambda: focusFar(),
+            "MidRight": lambda: focusNear(),
+            "TopRight": lambda: toggleAutoFocus(),
             "Next": lambda: self.nextCamera(),
             "Prev": lambda: self.nextCamera(-1),
         })
@@ -464,14 +560,24 @@ class MainScreen(QMainWindow):
     def cameraConfigScreen(self):
         self.labelTopLeft.setText("Discover Cameras")
         self.labelMidLeft.setText("Home Screen")
-        self.labelBottomLeft.setText("Network Config")
+        self.labelBottomLeft.setText("Network/Pi Config")
         self.labelCenterLeft.setText("Recall Preset")
         self.labelCenterMid.setText("Store Preset")
-        self.labelCenterRight.setText("")
+        self.labelCenterRight.setText("Home Camera")
         self.labelBottomRight.setText("Reset Camera")
         self.labelMidRight.setText("Set Camera Name")
         self.labelTopRight.setText("Set Camera IP")
         self.labelCurrentScreen.setText("Camera Config")
+
+        self.textView.hide()
+
+        def homeCamera():
+            def onConfirm():
+                if self.selectedCamera:
+                    self.selectedCamera.queueCommands(Command(Command.PanTiltHome))
+                    self.selectedCamera.queueCommands(Command(Command.ZoomPos(0)))
+                    self.popup("Homing camera")
+            self.dialogBox("Home camera - are you sure?",onConfirm)
 
         def changeIP():
             #todo get old ip
@@ -481,7 +587,8 @@ class MainScreen(QMainWindow):
                     return
                 #todo: validate?
                 #todo set the IP and subnet
-                print("Changing camera IP/sub","...","to","TODO","/",newSubnet)
+                print("Changing camera IP/sub",self.selectedCameraName,"to",self._tempIPAddress,"/",newSubnet)
+                self.selectedCamera.setIP(ip=self._tempIPAddress, netmask=newSubnet)
             def setIP(newip_):
                 if newip_==None:
                     self.popup("Canceled",500)
@@ -489,7 +596,8 @@ class MainScreen(QMainWindow):
                 try:
                     socket.inet_aton(newip_)
                     #todo store ip somehow
-                    if "172." or "169." in newip_[:4]:
+                    self._tempIPAddress = newip_
+                    if "172." in newip_[:4] or "169." in newip_[:4]:
                         newSubnet = "255.000.000.000"
                     else:
                         newSubnet = "255.255.255.000"
@@ -497,7 +605,7 @@ class MainScreen(QMainWindow):
                 except socket.error:
                     self.popup("Invalid IP Address!")
                     return
-            self.ButtonControl.input("010.000.001.123","Camera IP",setIP)
+            self.ButtonControl.input(padIPAddress(self.selectedCamera.ip),"Camera IP",setIP)
 
         def changeName():
             #todo get old name
@@ -506,8 +614,8 @@ class MainScreen(QMainWindow):
                     self.popup("Canceled",500)
                     return
                 # todo set name
-                print("Changing camera name", "...", "to",newName)
-            self.ButtonControl.input("OLDNAMEHERE","Camera Name",setName)
+                print("Changing camera name", self.selectedCamera.name, "to",newName)
+            self.ButtonControl.input(self.selectedCamera.name,"Camera Name",setName)
 
         self.ButtonControl.connectFunctions({
             "TopLeft": lambda: self.discoverCameras(),
@@ -515,6 +623,10 @@ class MainScreen(QMainWindow):
             "BottomLeft": lambda: self.networkConfigScreen(),
             "MidRight": lambda: changeName(),
             "TopRight": lambda: changeIP(),
+            "CenterLeft": lambda: self.recallPreset(),
+            "CenterMid": lambda: self.storePreset(),
+            "CenterRight": lambda: homeCamera(),
+            "BottomRight": lambda: self.selectedCamera.queueCommands(Command(Command.PanTiltReset,skipCompletion=True)),
             "Next": lambda: self.nextCamera(),
             "Prev": lambda: self.nextCamera(-1),
         })
@@ -530,6 +642,40 @@ class MainScreen(QMainWindow):
         self.labelMidRight.setText("")
         self.labelTopRight.setText("Set Ras-Pi IP")
         self.labelCurrentScreen.setText("Ras-Pi Network Config")
+
+        self.textView.show()
+
+        def getPrimaryIP():
+            # from https://stackoverflow.com/questions/166506/finding-local-ip-addresses-using-pythons-stdlib
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                # doesn't even have to be reachable
+                s.connect(('10.255.255.255', 1))
+                IP = s.getsockname()[0]
+            except Exception:
+                IP = '127.0.0.1'
+            finally:
+                s.close()
+            return IP
+
+        ip = getPrimaryIP()
+
+        if os.name=="nt":
+            interfaces=subprocess.check_output("netsh interface ipv4 show config").split(b"\r\n\r\n")
+            interface = multipleSpaceRegex.sub(" ",[str(x,"utf-8") for x in interfaces if ip in str(x)][0].strip())
+        elif os.name=="posix":
+            interface = subprocess.check_output("ip a")
+        else:
+            interface = ""
+
+
+        self.textView.setText("Network IP: "+ip+"\n"+
+                              "Found Cameras: "+str(len(self.cameras))+"\n"+
+                              "Missing Cameras: "+"0"+"\n"+
+                              "FrontPanel Connected: "+str(self.serial.isConnected())+"\n"+
+                              "\n"+
+                              interface
+                              )
 
         # this is to change the PI'S network, not a camera!!
         def changeIP():
@@ -563,9 +709,22 @@ class MainScreen(QMainWindow):
             "MidLeft": lambda: self.cameraConfigScreen(),
             "BottomLeft": lambda: self.homeScreen(),
             "TopRight": lambda: changeIP(),
+            "CenterLeft": lambda: self.recallPreset(),
+            "CenterMid": lambda: self.storePreset(),
             "Next": lambda: self.nextCamera(),
             "Prev": lambda: self.nextCamera(-1),
         })
+
+    def closeEvent(self, a0: QtGui.QCloseEvent) -> None:
+        print("Closing serial threads...")
+        self.serial.stop()
+        print("Stopping camera pinger")
+        self.pinger.stop()
+        log.info("Stopping cameras")
+        for camName, cam in self.cameras.items():
+            cam.close()
+        print("Exiting")
+        a0.accept()
 
 if __name__ == '__main__':
     app = QApplication([])

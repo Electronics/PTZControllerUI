@@ -324,6 +324,23 @@
      <height>131</height>
     </rect>
    </property>
+   <property name="styleSheet">
+    <string notr="true">QListView::item:selected:!active {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #ABAFE5, stop: 1 #8588B2);
+}
+
+QListView::item:selected:active {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #6a6ea9, stop: 1 #888dd9);
+}</string>
+   </property>
+   <property name="isWrapping" stdset="0">
+    <bool>false</bool>
+   </property>
+   <property name="wordWrap">
+    <bool>true</bool>
+   </property>
   </widget>
   <widget class="QFrame" name="camPosFrame">
    <property name="geometry">
@@ -866,6 +883,40 @@
     </property>
    </widget>
   </widget>
+  <widget class="QTextEdit" name="textView">
+   <property name="geometry">
+    <rect>
+     <x>390</x>
+     <y>90</y>
+     <width>181</width>
+     <height>131</height>
+    </rect>
+   </property>
+   <property name="readOnly">
+    <bool>true</bool>
+   </property>
+  </widget>
+  <widget class="QLabel" name="ticker">
+   <property name="geometry">
+    <rect>
+     <x>310</x>
+     <y>60</y>
+     <width>21</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="frameShape">
+    <enum>QFrame::Box</enum>
+   </property>
+   <property name="lineWidth">
+    <number>2</number>
+   </property>
+   <property name="text">
+    <string>-1</string>
+   </property>
+  </widget>
+  <zorder>labelCurrentScreen</zorder>
+  <zorder>ticker</zorder>
   <zorder>cameraListWidget</zorder>
   <zorder>labelTopLeft</zorder>
   <zorder>labelMidLeft</zorder>
@@ -876,15 +927,15 @@
   <zorder>labelMidRight</zorder>
   <zorder>labelTopRight</zorder>
   <zorder>labelCenterRight</zorder>
-  <zorder>labelCurrentScreen</zorder>
   <zorder>labelInfo</zorder>
   <zorder>camPosFrame</zorder>
   <zorder>progressBar</zorder>
   <zorder>buttonPrev</zorder>
   <zorder>buttonNext</zorder>
   <zorder>groupBox</zorder>
-  <zorder>detailedPopup</zorder>
+  <zorder>textView</zorder>
   <zorder>typingFrame</zorder>
+  <zorder>detailedPopup</zorder>
   <zorder>infoPopup</zorder>
  </widget>
  <resources/>
