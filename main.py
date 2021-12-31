@@ -475,12 +475,12 @@ class MainScreen(QMainWindow):
             interface = ""
 
 
-        self.textView.setText("Network IP: "+ip+"\n"+
+        self.textView.setText("Network IP: "+str(ip)+"\n"+
                               "Found Cameras: "+str(len(self.cameras))+"\n"+
                               "Missing Cameras: "+"0"+"\n"+
                               "FrontPanel Connected: "+str(self.serial.isConnected())+"\n"+
                               "\n"+
-                              interface
+                              str(interface)
                               )
 
         # this is to change the PI'S network, not a camera!!
