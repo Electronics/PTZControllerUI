@@ -168,7 +168,6 @@ class ViscaIPCamera:
 			#   So for now we'll just not bother given we never use join()
 			# self.cmd_queue.task_done()
 			await asyncio.sleep(0.015)
-			await asyncio.sleep(0.5)
 		LOGGER.info("Queue watcher exited")
 
 	def sendCommand(self, command, skipCompletion=False):

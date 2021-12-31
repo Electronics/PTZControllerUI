@@ -470,7 +470,7 @@ class MainScreen(QMainWindow):
             interfaces=subprocess.check_output("netsh interface ipv4 show config").split(b"\r\n\r\n")
             interface = multipleSpaceRegex.sub(" ",[str(x,"utf-8") for x in interfaces if ip in str(x)][0].strip())
         elif os.name=="posix":
-            interface = subprocess.check_output("ip a")
+            interface = subprocess.check_output("ip a", shell=True)
         else:
             interface = ""
 
