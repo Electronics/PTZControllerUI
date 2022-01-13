@@ -227,8 +227,12 @@ class MainScreen(QMainWindow):
         found += self.getManualCamerasFromdb()
         database.close()
 
-        known_ips = [c.ip for c in self.cameras.items()] # old list of ips
-        self.cameras.clear()  # do NOT re-initialise as we've passed a reference to other bits
+        known_ips = [c.ip for k, c in self.cameras.items()] # old list of ips
+        known_names = list(self.cameras.keys()) # old list of cam names
+        # no clearing as we find the previous found cameras and update them
+        #TODO: clear out old cameras that are properly gone
+        #self.cameras.clear()  # do NOT re-initialise as we've passed a reference to other bits
+        notFound = list(self.cameras.keys()) # we'll remove cameras as we find them, anything left we need to remove
 
         if found:
             for cam in found:
@@ -238,9 +242,36 @@ class MainScreen(QMainWindow):
                     except socket.timeout:
                         # probably camera is on a different network
                         log.warning("Failed to initialise camera %s",str(cam))
-                log.info("Adding '%s'",str(cam))
-                self.cameras[str(cam)] = cam
-                self.cameraListWidget.addItem(QListWidgetItem(str(cam)))
+                    log.info("Adding '%s'",str(cam))
+                    self.cameras[str(cam)] = cam
+
+                    cameraItem = QListWidgetItem(str(cam))
+                    cameraItem.setData(QtCore.Qt.UserRole, cam)
+                    self.cameraListWidget.addItem(cameraItem)
+
+                else:
+                    print("FUCK I NEED TO REDO THIS BIT")
+                    # camera already existed (presumably)
+                    oldName = known_names[known_ips.index(cam.ip)]
+                    self.cameras.pop(oldName)
+                    notFound.remove(oldName)
+
+                    self.cameras[str(cam)] = cam
+                    items = self.cameraListWidget.findItems(oldName, QtCore.Qt.MatchExactly)
+                    if len(items)==1:
+                        items[0].setData(QtCore.Qt.UserRole, cam)
+                    else:
+                        log.error("Failed to find existing camera in QListWidget")
+
+        # delete old cameras that have disappeared
+        for camName in notFound:
+            self.cameras.pop(camName)
+            # find qlistwidget item
+            item = self.cameraListWidget.findItems(camName, QtCore.Qt.MatchExactly)[0]
+            index = self.cameraListWidget.row(item)
+            self.cameraListWidget.takeItem(index)
+            log.info("Removed missing camera %s",item.data(QtCore.Qt.UserRole))
+            del item
 
 
     def changeSelectedCamera(self):
