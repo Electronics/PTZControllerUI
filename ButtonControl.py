@@ -153,6 +153,9 @@ class ButtonControl(QObject):
             # validity should be checked in the callback
             # as well as any feedback to the user
             self.typingCallback(retStr)
+        else:
+            if "Enter" in self.functionDict:
+                self.functionDict["Enter"]()
 
     def connectUIButtons(self):
         self.UI.labelTopLeft.mousePressEvent = self.ButtonTopLeft

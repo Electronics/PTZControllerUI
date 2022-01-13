@@ -3,7 +3,7 @@ import socket
 import logging
 import threading
 from sony_visca import aioudp
-from sony_visca.visca_commands import Inquiry
+from sony_visca.visca_commands import Inquiry, Command
 from sony_visca.myqueue import MyQueue
 
 socket.setdefaulttimeout(2)
@@ -55,8 +55,8 @@ class ViscaIPCamera:
 	def __str__(self):
 		return self.name+" ("+self.ip+")"
 
-	def __str__(self):
-		return f"{self.name}({self.mac}) {self.ip}"
+	# def __str__(self):
+	# 	return f"{self.name}({self.mac}) {self.ip}"
 
 	def __repr__(self):
 		return f"<ViscaIPCamera name={self.name!r} mac={self.mac!r}>"
@@ -82,38 +82,39 @@ class ViscaIPCamera:
 			LOGGER.info("Opened local UDP socket")
 		self._remote_sock = await aioudp.open_remote_endpoint(self.ip, self.port)
 		LOGGER.info("Opened remote UDP socket to cam %s", self.ip)
-		self.is_connected = True
-		if not self.simple_visca:
-			await self.resetSequenceNumber()
+		try:
+			if not self.simple_visca:
+				await self.resetSequenceNumber()
+			self.is_connected = True
+		except asyncio.TimeoutError:
+			LOGGER.warning("Timeout trying to reset sequence number on camera %s", self.ip)
 
 	def close(self):
 		"""Close communication sockets, and event loop if this is the last camera
 		We have to teardown the event loop when the last camera is torn down as we're hiding async from the user
 		"""
-		if self._LOOP_THREAD:
-			future = asyncio.run_coroutine_threadsafe(self._close(), self._LOOP_THREAD.loop)
-			future.result()
-			LOGGER.info("Closed remote UDP socket to cam %s", self.ip)
-		self.is_connected = False
+		future = asyncio.run_coroutine_threadsafe(self._close(), self._LOOP_THREAD.loop)
+		future.result()
+		LOGGER.info("Closed remote UDP socket to cam %s", self.ip)
 		self.__class__._CONNECTED_CAMS -= 1
 		if self._CONNECTED_CAMS == 0:
 			# If this is the last camera, shutdown the local socket and the event loop
-			if self._LOOP_THREAD:
-				future = asyncio.run_coroutine_threadsafe(self._close_local(), self._LOOP_THREAD.loop)
-				future.result()
-				LOGGER.info("Closed local UDP socket")
-				self._LOOP_THREAD.stop()
-				LOGGER.info("Stopped event loop")
-				self.__class__._LOOP_THREAD = None
+			future = asyncio.run_coroutine_threadsafe(self._close_local(), self._LOOP_THREAD.loop)
+			future.result()
+			LOGGER.info("Closed local UDP socket")
+			self._LOOP_THREAD.stop()
+			LOGGER.info("Stopped event loop")
+			self.__class__._LOOP_THREAD = None
 
 	async def _close(self):
 		"""Close this camera"""
-		self._remote_sock.close()
-		self._remote_sock = None
 		if self._queue_loop is not None:
 			self.cmd_queue.trigger_shutdown()
 			LOGGER.debug("Waiting for queue watcher to exit...")
 			await asyncio.gather(self._queue_loop)
+		self._remote_sock.close()
+		self._remote_sock = None
+		self.is_connected = False
 
 	async def _close_local(self):
 		"""Close the local socket"""
@@ -121,6 +122,9 @@ class ViscaIPCamera:
 		self.__class__._LOCAL_SOCK = None
 
 	def setIP(self, ip=None, netmask=None, gateway=None, name=None):
+		"""Set IP address of camera
+		Currently only compatible with Sony cameras.
+		"""
 		# name must be up to 8 alphanumeric characters (and blank)
 		if not ip:
 			ip = self.ip
@@ -130,11 +134,17 @@ class ViscaIPCamera:
 			gateway = self.gateway
 		if not name:
 			name = self.name
-		command = (b"\x02MAC:"+bytes(self.mac, encoding="utf-8")+b"\xFFIPADR:"+bytes(ip, encoding="utf-8")+
+		mac_bytes = bytes(self.mac, encoding="utf-8")
+		command = (b"\x02MAC:"+mac_bytes+b"\xFFIPADR:"+bytes(ip, encoding="utf-8")+
 					b"\xFFMASK:"+bytes(netmask, encoding="utf-8")+b"\xFFGATEWAY:"+bytes(gateway, encoding="utf-8")+
 					b"\xFFNAME:"+bytes(name, encoding="utf-8")+b"\xFF\x03")
-		#sock.sendto(command, (self.ip, 52380))
-		self.sendRawCommand(command, ip="<broadcast>", port=52380)
+		with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+			sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+			sock.sendto(command, ("<broadcast>", 52380))
+			LOGGER.info("setIP sent to %r, new data: ip=%r, name=%r", self.mac, ip, name)
+			resp = sock.recv(1024)
+			LOGGER.debug("Raw response from setIP: %r", resp)
+			assert resp == b"\x02ACK:" + mac_bytes + b"\xff\x03", "setIP response is not as expected!"
 
 	def queueCommands(self, *args, override=True):
 		"""Queue one or more messages to be sent, generally this overrides the last command unless override=False"""
@@ -167,13 +177,12 @@ class ViscaIPCamera:
 			# We should really call task done after a get() but my clearing of the queue in MyQueue breaks the counting.
 			#   So for now we'll just not bother given we never use join()
 			# self.cmd_queue.task_done()
-			await asyncio.sleep(0.015)
 		LOGGER.info("Queue watcher exited")
 
 	def sendCommand(self, command, skipCompletion=False):
 		"""Send a command to the camera using the event loop"""
 		future = asyncio.run_coroutine_threadsafe(
-			self._sendCommand(command, skipCompletion=skipCompletion), self._LOOP_THREAD.loop
+			self._sendCommand(command), self._LOOP_THREAD.loop
 		)
 		return future.result()
 
@@ -184,17 +193,28 @@ class ViscaIPCamera:
 			command.value = b"\x01\x00" + length + self.sequenceNumber.to_bytes(4, 'big') + command.value
 		data = await self._sendRawCommand(command.value, **command.kwargs) # TODO: deal with udp packets getting lost and sequence number desyncing (see manual)
 		self.sequenceNumber += 1
+		command.result = data
 		return data
 
 	def inquire(self, command):
-		return self.sendCommand(command, skipCompletion=True) # no acknoledge message for a inquiry
+		"""Send an inquiry message (must be wrapped in a Command()"""
+		future = asyncio.run_coroutine_threadsafe(self._inquire(command), self._LOOP_THREAD.loop)
+		return future.result()
+
+	async def _inquire(self, command):
+		# No acknowledge messages provided for inquiries
+		command.skipCompletion = True
+		return await self._sendCommand(command)
 
 	async def resetSequenceNumber(self):
+		"""Reset the Sony camera sequence number"""
 		self.sequenceNumber = 1
-		await self._sendRawCommand(bytearray.fromhex('02 00 00 01 00 00 00 01 01'), skipCompletion=True)
+		await self._sendRawCommand(
+			bytearray.fromhex('02 00 00 01 00 00 00 01 01'), skipCompletion=True, raise_on_timeout=True
+		)
 
 	def getPos(self):
-		data = self.inquire(Inquiry.PanTiltPos)
+		data = self.inquire(Command(Inquiry.PanTiltPos))
 		pan = (data[10] << 12) | (data[11] << 8) | (data[12] << 4) | data[13]
 		tilt = (data[14] << 12) | (data[15] << 8) | (data[16] << 4) | data[17]
 		LOGGER.debug("Got positions, Pan: %0.4x Tilt: %0.4x", pan, tilt)
@@ -207,10 +227,10 @@ class ViscaIPCamera:
 			LOGGER.error("Command failed with error: %r", data)
 		if len(data) > 10:
 			if data[8] == 0x90:
-				# acknowledged / completion / error message
-				if data[9] == 0x41:
+				# acknowledged (0x4Y) / completion (0x5Y) / error message (0x6Y), Y = socket number
+				if (data[9] & 0xf0) == 0x40:
 					LOGGER.debug("Command acknowledged successfully")
-				if data[9] == 0x51:
+				if (data[9] & 0xf0) == 0x50:
 					LOGGER.debug("Command completed successfully")
 				if (data[9] & 0xf0) == 0x60:
 					LOGGER.error("Command failed with error: %r", data)
@@ -224,7 +244,7 @@ class ViscaIPCamera:
 				LOGGER.error("Returned data was too short?")
 		return data
 
-	async def _sendRawCommand(self, command, skipCompletion=False):
+	async def _sendRawCommand(self, command, skipCompletion=False, raise_on_timeout=False):
 		# this sends a command and waits for a response, note it does NOT calculate / use the sequence number
 		# command should be a bytes object
 		LOGGER.debug("Sending to %s: %r", self.ip, command)
@@ -244,7 +264,9 @@ class ViscaIPCamera:
 		except asyncio.TimeoutError:
 			LOGGER.error("Timeout waiting for data from camera %s!", self.ip)
 			# TODO: may be nice to set is_connected or similar False here and update UI to show warning. Reset on next
-			#  success.
+			#  success. Bare in mind the implications of setting is_connected to False in other code
+			if raise_on_timeout:
+				raise
 
 	@classmethod
 	def discoverCameras(cls):
@@ -258,7 +280,7 @@ class ViscaIPCamera:
 			s.bind(("", 52380))
 
 			discoverCmd = b"\x02ENQ:network\xFF\x33"
-			LOGGER.info("Sending discover...")
+			LOGGER.debug("Sending discover...")
 			s.sendto(discoverCmd, ('<broadcast>', 52380))
 			cameras = []
 			try:
@@ -272,7 +294,7 @@ class ViscaIPCamera:
 					LOGGER.info("Found camera '%s' (%s) at IP %s", name, mac, addr[0])
 					cameras.append(cls(name, addr[0], mac))
 			except socket.timeout:
-				LOGGER.info("End discover")
+				LOGGER.debug("End discover")
 			return cameras
 		finally:
 			s.close()

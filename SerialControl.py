@@ -8,7 +8,7 @@ from sony_visca.visca_commands import Command
 log = logging.getLogger("SerialControl")
 log.setLevel(logging.DEBUG)
 
-SERIAL_PORT = "COM8"
+SERIAL_PORT = "/dev/serial0"
 JOYSTICK_NUM_STEPS = 16 # number of steps in the +ve and -ve directions
 
 serialRegex = re.compile(r"(?P<command>[A-Z]+)(?P<num0>-?[0-9]+)?(,(?P<num1>-?[0-9]+)(,(?P<num2>-?[0-9]+),(?P<num3>-?[0-9]+),(?P<num4>-?[0-9]+),(?P<num5>-?[0-9]+)(,(?P<num6>-?[0-9]+),(?P<num7>-?[0-9]+),(?P<num8>-?[0-9]+))?)?)?")
@@ -118,6 +118,12 @@ class SerialControl(QThread):
         self.wait()
         self.deleteLater()
 
+    def sendCommand(self, command):
+        if "\n" not in command:
+            command += "\n"
+        if self.port and self.port.is_open:
+            self.port.write(command.encode("utf-8"))
+
     def run(self):
         print("Serial Thread started")
         if not self.isConnected():
@@ -181,7 +187,7 @@ class SerialControl(QThread):
                             self.uiSignal.emit(["detailedPopupDetails","setText","X:%d Y:%d Z:%d\nminX:%d minY:%d minZ:%d\nmaxX:%d maxY:%d maxZ:%d"%(rawX,rawY,rawZ,minX,minY,minZ,maxX,maxY,maxZ)])
                             if not self.learning:
                                 self.learning = True
-                                self.uiSignal.emit(["detailedPopupTitle","setText","Joystick Calibration: Move the joystick to all maximum limits, center to home and then press continue"])
+                                self.uiSignal.emit(["detailedPopupTitle","setText","Joystick Calibration: Move the joystick to all maximum limits, center to home and then press Enter"])
                                 self.uiSignal.emit(["detailedPopup","show"])
                         elif command=="HOME":
                             log.debug("Learning home")

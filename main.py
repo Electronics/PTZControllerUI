@@ -93,7 +93,7 @@ class MainScreen(QMainWindow):
         if key == QtCore.Qt.Key_Escape:
             log.debug("Keyboard Escape pressed")
             self.ButtonControl.escape()
-        elif key == QtCore.Qt.Key_Return:
+        elif key == QtCore.Qt.Key_Return or key == QtCore.Qt.Key_Enter:
             log.debug("Keyboard Enter pressed")
             self.ButtonControl.ButtonEnter()
 
@@ -101,9 +101,11 @@ class MainScreen(QMainWindow):
         temp = ViscaIPCamera("LaurieC3","192.168.0.68","DC:ED:84:A1:9A:77",simple_visca=True, port=1259)
         temp.initialise()
         self.cameras["LaurieC3 [192.168.0.68]"] = temp
-        self.cameraListWidget.addItem(QListWidgetItem("LaurieC3 [192.168.0.68]"))
-        self.cameras["LaurieC3 [TEST]"] = temp
-        self.cameraListWidget.addItem(QListWidgetItem("LaurieC3 [TEST]"))
+        cameraItem = QListWidgetItem("LaurieC3 [192.168.0.68]")
+        cameraItem.setData(QtCore.Qt.UserRole, temp)
+        self.cameraListWidget.addItem(cameraItem)
+        # self.cameras["LaurieC3 [TEST]"] = temp
+        # self.cameraListWidget.addItem(QListWidgetItem("LaurieC3 [TEST]"))
         # self.cameras = {"CAM1 (10.0.1.20) [SONY]": None,
         #                 "CAM2 - LAURIE (192.168.0.68) [CHINESE]": temp,
         #                 "CAM3 WOWEE (10.0.1.199)": None,
@@ -158,7 +160,7 @@ class MainScreen(QMainWindow):
                 cameraItem.setForeground(QtGui.QBrush(QtCore.Qt.red))
             else:
                 cameraItem.setForeground(QtGui.QBrush(QtCore.Qt.black))
-            log.log(0,"Ping camera callback:",camera,"status",status)
+            log.log(0,"Ping camera callback: %s status %s",camera,status) # highest level of verbosity
         else:
             log.warning("[PingCallback] Unable to find camera")
 
@@ -197,9 +199,7 @@ class MainScreen(QMainWindow):
         found = ViscaIPCamera.discoverCameras()
         log.info("Found %d cameras", len(found))
         updateUI()
-        self.infoPopup.setText("Found "+str(len(found))+" cameras") #todo make this popup appear for a second or something
-        updateUI()
-        QTimer.singleShot(500, self.infoPopup.hide)
+        self.popup("Found "+str(len(found))+" cameras")
 
         if found:
             for cam in found:
@@ -248,12 +248,11 @@ class MainScreen(QMainWindow):
             # todo: send all these on a different thread: or with new library and queueing it might be ok
             self.selectedCamera.queueCommands(Command(Command.PanTiltStop()), Command(Command.ZoomStop), Command(Command.FocusStop), override=True)
 
-        cameraName = self.cameraListWidget.currentItem().text()
-        log.info("Selected camera changed to %s",cameraName)
-        self.labelInfo.setText(cameraName)
         try:
-            self.selectedCamera = self.cameras[cameraName]
-            self.selectedCameraName = cameraName
+            self.selectedCamera = self.cameraListWidget.currentItem().data(QtCore.Qt.UserRole)
+            self.selectedCameraName = self.selectedCamera.name
+            log.info("Selected camera changed to %s", self.selectedCameraName)
+            self.labelInfo.setText(self.selectedCameraName)
         except KeyError:
             log.warning("Tried to switch camera to a non-existent camera; has it been deleted?")
 
@@ -261,7 +260,7 @@ class MainScreen(QMainWindow):
 
     def nextCamera(self, increment=1):
         # increment allows for going backwards (-1) and other funky things
-        log.info("Next camera")
+        log.info("Next camera" if increment>0 else "Prev camera")
         current = self.cameraListWidget.currentItem()
         cameraList = list(self.cameras)
         if not cameraList:
@@ -319,6 +318,8 @@ class MainScreen(QMainWindow):
         self.textView.hide()
 
         def toggleAutoFocus():
+            if not self.selectedCamera:
+                return
             if self.isCameraAutoFocus():
                 log.info("Turning autofocus off")
                 self.selectedCamera.isAutoFocusEnabled = False
@@ -391,8 +392,12 @@ class MainScreen(QMainWindow):
                     return
                 #todo: validate?
                 #todo set the IP and subnet
-                log.info("Changing camera IP/sub",self.selectedCameraName,"to",self._tempIPAddress,"/",newSubnet)
-                self.selectedCamera.setIP(ip=self._tempIPAddress, netmask=newSubnet)
+                log.info("Changing camera IP/sub %s to %s/%s",self.selectedCameraName,self._tempIPAddress,newSubnet)
+                try:
+                    self.selectedCamera.setIP(ip=self._tempIPAddress, netmask=newSubnet)
+                except socket.timeout:
+                    self.popup("Failed to set IP: timeout")
+                    log.warning("Failed to set IP: timeout")
             def setIP(newip_):
                 if newip_==None:
                     self.popup("Canceled",500)
@@ -423,6 +428,11 @@ class MainScreen(QMainWindow):
             else:
                 self.popup("No camera selected!")
 
+        def PanTiltReset():
+            if not self.selectedCamera:
+                return
+            self.selectedCamera.queueCommands(Command(Command.PanTiltReset, skipCompletion=True))
+
         self.ButtonControl.connectFunctions({
             "TopLeft": lambda: self.discoverCameras(),
             "MidLeft": lambda: self.homeScreen(),
@@ -432,7 +442,7 @@ class MainScreen(QMainWindow):
             "CenterLeft": lambda: self.recallPreset(),
             "CenterMid": lambda: self.storePreset(),
             "CenterRight": lambda: homeCamera(),
-            "BottomRight": lambda: self.selectedCamera.queueCommands(Command(Command.PanTiltReset,skipCompletion=True)),
+            "BottomRight": lambda: PanTiltReset(),
             "Next": lambda: self.nextCamera(),
             "Prev": lambda: self.nextCamera(-1),
         })
@@ -445,7 +455,7 @@ class MainScreen(QMainWindow):
         self.labelCenterMid.setText("Store Preset")
         self.labelCenterRight.setText("")
         self.labelBottomRight.setText("Set Ras-Pi IP")
-        self.labelMidRight.setText("")
+        self.labelMidRight.setText("Calibrate Joystick")
         self.labelTopRight.setText("Add Manual Camera")
         self.labelCurrentScreen.setText("Settings")
 
@@ -532,9 +542,10 @@ class MainScreen(QMainWindow):
                         else:
                             # todo determine the type of camera
                             log.debug("Adding new camera: %s[%s,%s]", newName, newip_,mac)
-                            cam = ViscaIPCamera(newName, ip, mac)
-                            self.cameras[str(cam)] = cam
-                            self.cameraListWidget.addItem(QListWidgetItem(str(cam)))
+                            cam = ViscaIPCamera(newName, newip_, mac)
+                            camItem = QListWidgetItem(str(cam))
+                            camItem.setData(QtCore.Qt.UserRole, cam)
+                            self.cameraListWidget.addItem(camItem)
                             log.debug("Adding new camera[%s,%s,%s] to database", newName, newip_,mac)
                             database.query(
                                 "INSERT INTO cameras (name, ip, type, mac, autocreated) VALUES (?, ?, ?, ?, 0)",
@@ -549,16 +560,29 @@ class MainScreen(QMainWindow):
 
             self.ButtonControl.input("", "Camera Name", setName)
 
+        isCalibrating = False
+        def calibrateJoystick():
+            # send LEARN and LEARNOFF
+            isCalibrating = True
+            self.serial.sendCommand("LEARN")
+
+        def finishCalibrate():
+            isCalibrating = False
+            self.serial.sendCommand("LEARNOFF")
+
+
         self.ButtonControl.connectFunctions({
             "TopLeft": lambda: self.discoverCameras(),
             "MidLeft": lambda: self.cameraConfigScreen(),
             "BottomLeft": lambda: self.homeScreen(),
             "BottomRight": lambda: changeIP(),
+            "MidRight": lambda: calibrateJoystick(),
             "TopRight": lambda: addCamera(),
             "CenterLeft": lambda: self.recallPreset(),
             "CenterMid": lambda: self.storePreset(),
             "Next": lambda: self.nextCamera(),
             "Prev": lambda: self.nextCamera(-1),
+            "Enter": lambda: finishCalibrate()
         })
 
     def closeEvent(self, a0: QtGui.QCloseEvent) -> None:
@@ -568,7 +592,8 @@ class MainScreen(QMainWindow):
         self.pinger.stop()
         log.info("Stopping cameras")
         for camName, cam in self.cameras.items():
-            cam.close()
+            if cam:
+                cam.close()
         log.info("Exiting")
         a0.accept()
 
