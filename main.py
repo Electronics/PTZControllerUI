@@ -53,6 +53,18 @@ class MainScreen(QMainWindow):
         self.ButtonControl = ButtonControl(self)
         self.ButtonControl.connectUIButtons()
         self.uiUpdateTrigger.connect(self.UISignalReceiver)
+        self.ButtonControl.connectShortcutFunctions({
+            "0": lambda: self.doCameraCommand(Command.MemoryRecall(0)),
+            "1": lambda: self.doCameraCommand(Command.MemoryRecall(1)),
+            "2": lambda: self.doCameraCommand(Command.MemoryRecall(2)),
+            "3": lambda: self.doCameraCommand(Command.MemoryRecall(3)),
+            "4": lambda: self.doCameraCommand(Command.MemoryRecall(4)),
+            "5": lambda: self.doCameraCommand(Command.MemoryRecall(5)),
+            "6": lambda: self.doCameraCommand(Command.MemoryRecall(6)),
+            "7": lambda: self.doCameraCommand(Command.MemoryRecall(7)),
+            "8": lambda: self.doCameraCommand(Command.MemoryRecall(8)),
+            "9": lambda: self.doCameraCommand(Command.MemoryRecall(9))
+        })
 
         self.setWindowTitle("PTZ Controller")
         camPosScene = QGraphicsScene(self)
@@ -84,7 +96,7 @@ class MainScreen(QMainWindow):
         self.show()
 
         self.discoverCameras()
-        self.debug()
+        # self.debug()
         self.nextCamera() # select a camera to start with please
 
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
@@ -485,7 +497,10 @@ class MainScreen(QMainWindow):
         self.labelCenterLeft.setText("Recall Preset")
         self.labelCenterMid.setText("Store Preset")
         self.labelCenterRight.setText("")
-        self.labelBottomRight.setText("Set Ras-Pi IP")
+        if self.ButtonControl.isShortcutActive():
+            self.labelBottomRight.setText("Preset Shortcuts On")
+        else:
+            self.labelBottomRight.setText("Preset Shortcuts Off")
         self.labelMidRight.setText("Calibrate Joystick")
         self.labelTopRight.setText("Add Manual Camera")
         self.labelCurrentScreen.setText("Settings")
@@ -601,12 +616,20 @@ class MainScreen(QMainWindow):
             isCalibrating = False
             self.serial.sendCommand("LEARNOFF")
 
+        def swapShortcuts():
+            if self.ButtonControl.isShortcutActive():
+                self.ButtonControl.setShortcutActive(False)
+                self.self.labelBottomRight.setText("Preset Shortcuts Off")
+            else:
+                self.ButtonControl.setShortcutActive(True)
+                self.self.labelBottomRight.setText("Preset Shortcuts On")
+
 
         self.ButtonControl.connectFunctions({
             "TopLeft": lambda: self.discoverCameras(),
             "MidLeft": lambda: self.cameraConfigScreen(),
             "BottomLeft": lambda: self.homeScreen(),
-            "BottomRight": lambda: changeIP(),
+            "BottomRight": lambda: swapShortcuts(),
             "MidRight": lambda: calibrateJoystick(),
             "TopRight": lambda: addCamera(),
             "CenterLeft": lambda: self.recallPreset(),

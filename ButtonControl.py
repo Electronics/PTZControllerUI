@@ -8,9 +8,11 @@ log.setLevel(logging.INFO)
 
 class ButtonControl(QObject):
     functionDict = {} # a way of dynamically changing what the buttons do in a nice-ish way
+    shortcutDict = {} # when shortcuts (numpad) is active for presets
     def __init__(self, parent):
         super().__init__()
         self.UI = parent
+        self.shortcutsActive = False
 
     typingPos = -1  # track where in an input string we are, -1 = no input
     typingString = ""
@@ -27,6 +29,11 @@ class ButtonControl(QObject):
         self.UI.typingInput.setFocus()
         if self.typingPos<0:
             self.typingPos = 0
+
+    def setShortcutActive(self, state):
+        self.shortcutsActive = state
+    def isShortcutActive(self):
+        return self.shortcutsActive
 
     def input(self, s, title="", callback=None):
         # callback should be a function with the arguments (string), if the returned string is None, cancel was pressed
@@ -125,25 +132,55 @@ class ButtonControl(QObject):
             self.functionDict["Prev"]()
 
     def Button0(self,event=None):
-        self.typeChar("0")
+        if self.shortcutsActive:
+            self.shortcutDict["0"]()
+        else:
+            self.typeChar("0")
     def Button1(self,event=None):
-        self.typeChar("1")
+        if self.shortcutsActive:
+            self.shortcutDict["1"]()
+        else:
+            self.typeChar("1")
     def Button2(self,event=None):
-        self.typeChar("2")
+        if self.shortcutsActive:
+            self.shortcutDict["2"]()
+        else:
+            self.typeChar("2")
     def Button3(self,event=None):
-        self.typeChar("3")
+        if self.shortcutsActive:
+            self.shortcutDict["3"]()
+        else:
+            self.typeChar("3")
     def Button4(self,event=None):
-        self.typeChar("4")
+        if self.shortcutsActive:
+            self.shortcutDict["4"]()
+        else:
+            self.typeChar("4")
     def Button5(self,event=None):
-        self.typeChar("5")
+        if self.shortcutsActive:
+            self.shortcutDict["5"]()
+        else:
+            self.typeChar("5")
     def Button6(self,event=None):
-        self.typeChar("6")
+        if self.shortcutsActive:
+            self.shortcutDict["6"]()
+        else:
+            self.typeChar("6")
     def Button7(self,event=None):
-        self.typeChar("7")
+        if self.shortcutsActive:
+            self.shortcutDict["7"]()
+        else:
+            self.typeChar("7")
     def Button8(self,event=None):
-        self.typeChar("8")
+        if self.shortcutsActive:
+            self.shortcutDict["8"]()
+        else:
+            self.typeChar("8")
     def Button9(self,event=None):
-        self.typeChar("9")
+        if self.shortcutsActive:
+            self.shortcutDict["9"]()
+        else:
+            self.typeChar("9")
     def ButtonClear(self,event=None):
         self.backspace()
     def ButtonEnter(self, event=None):
@@ -186,6 +223,9 @@ class ButtonControl(QObject):
 
     def connectFunctions(self, fDict):
         self.functionDict = fDict
+
+    def connectShortcutFunctions(self, fDict):
+        self.shortcutDict = fDict
 
     def decodeButton(self, num, press=True):
         buttonMap = [
