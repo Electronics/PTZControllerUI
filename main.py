@@ -53,17 +53,20 @@ class MainScreen(QMainWindow):
         self.ButtonControl = ButtonControl(self)
         self.ButtonControl.connectUIButtons()
         self.uiUpdateTrigger.connect(self.UISignalReceiver)
+        def presetRecallShortcut(presetNum):
+            self.popup("Recalling Preset "+str(presetNum))
+            self.doCameraCommand(Command.MemoryRecall(presetNum))
         self.ButtonControl.connectShortcutFunctions({
-            "0": lambda: self.doCameraCommand(Command.MemoryRecall(0)),
-            "1": lambda: self.doCameraCommand(Command.MemoryRecall(1)),
-            "2": lambda: self.doCameraCommand(Command.MemoryRecall(2)),
-            "3": lambda: self.doCameraCommand(Command.MemoryRecall(3)),
-            "4": lambda: self.doCameraCommand(Command.MemoryRecall(4)),
-            "5": lambda: self.doCameraCommand(Command.MemoryRecall(5)),
-            "6": lambda: self.doCameraCommand(Command.MemoryRecall(6)),
-            "7": lambda: self.doCameraCommand(Command.MemoryRecall(7)),
-            "8": lambda: self.doCameraCommand(Command.MemoryRecall(8)),
-            "9": lambda: self.doCameraCommand(Command.MemoryRecall(9))
+            "0": lambda: presetRecallShortcut(0),
+            "1": lambda: presetRecallShortcut(1),
+            "2": lambda: presetRecallShortcut(2),
+            "3": lambda: presetRecallShortcut(3),
+            "4": lambda: presetRecallShortcut(4),
+            "5": lambda: presetRecallShortcut(5),
+            "6": lambda: presetRecallShortcut(6),
+            "7": lambda: presetRecallShortcut(7),
+            "8": lambda: presetRecallShortcut(8),
+            "9": lambda: presetRecallShortcut(9)
         })
 
         self.setWindowTitle("PTZ Controller")
@@ -437,7 +440,8 @@ class MainScreen(QMainWindow):
                 #todo set the IP and subnet
                 log.info("Changing camera IP/sub %s to %s/%s",self.selectedCameraName,self._tempIPAddress,newSubnet)
                 try:
-                    self.selectedCamera.setIP(ip=self._tempIPAddress, netmask=newSubnet)
+                    if self.selectedCamera:
+                        self.selectedCamera.setIP(ip=self._tempIPAddress, netmask=newSubnet)
                 except socket.timeout:
                     self.popup("Failed to set IP: timeout")
                     log.warning("Failed to set IP: timeout")
@@ -496,7 +500,7 @@ class MainScreen(QMainWindow):
         self.labelBottomLeft.setText("Home Screen")
         self.labelCenterLeft.setText("Recall Preset")
         self.labelCenterMid.setText("Store Preset")
-        self.labelCenterRight.setText("")
+        self.labelCenterRight.setText("Reboot/Shutdown")
         if self.ButtonControl.isShortcutActive():
             self.labelBottomRight.setText("Preset Shortcuts On")
         else:
@@ -619,10 +623,10 @@ class MainScreen(QMainWindow):
         def swapShortcuts():
             if self.ButtonControl.isShortcutActive():
                 self.ButtonControl.setShortcutActive(False)
-                self.self.labelBottomRight.setText("Preset Shortcuts Off")
+                self.labelBottomRight.setText("Preset Shortcuts Off")
             else:
                 self.ButtonControl.setShortcutActive(True)
-                self.self.labelBottomRight.setText("Preset Shortcuts On")
+                self.labelBottomRight.setText("Preset Shortcuts On")
 
 
         self.ButtonControl.connectFunctions({
@@ -634,9 +638,54 @@ class MainScreen(QMainWindow):
             "TopRight": lambda: addCamera(),
             "CenterLeft": lambda: self.recallPreset(),
             "CenterMid": lambda: self.storePreset(),
+            "CenterRight": lambda: self.shutdownScreen(),
             "Next": lambda: self.nextCamera(),
             "Prev": lambda: self.nextCamera(-1),
             "Enter": lambda: finishCalibrate()
+        })
+
+    def shutdownScreen(self):
+        self.labelTopLeft.setText("Discover Cameras")
+        self.labelMidLeft.setText("Home Screen")
+        self.labelBottomLeft.setText("Settings")
+        self.labelCenterLeft.setText("Recall Preset")
+        self.labelCenterMid.setText("Store Preset")
+        self.labelCenterRight.setText("Exit to Desktop")
+        self.labelBottomRight.setText("Restart PiControl")
+        self.labelMidRight.setText("Restart pi")
+        self.labelTopRight.setText("Shutdown pi")
+        self.labelCurrentScreen.setText("Shutdown / Reboot Menu")
+        self.textView.hide()
+
+        def shutdown():
+            if os.name != "posix":
+                self.popup("Unable to shutdown")
+                return
+            os.system("shutdown now")
+        def reboot():
+            if os.name != "posix":
+                self.popup("Unable to reboot")
+                return
+            os.system("reboot")
+        def restartControl():
+            self.close()
+        def exitThis():
+            if os.name == "posix":
+                os.system("touch /tmp/norestart")
+            self.close()
+
+        self.ButtonControl.connectFunctions({
+            "TopLeft": lambda: self.discoverCameras(),
+            "MidLeft": lambda: self.homeScreen(),
+            "BottomLeft": lambda: self.networkConfigScreen(),
+            "CenterLeft": lambda: self.recallPreset(),
+            "CenterMid": lambda: self.storePreset(),
+            "Next": lambda: self.nextCamera(),
+            "Prev": lambda: self.nextCamera(-1),
+            "TopRight": lambda: shutdown(),
+            "MidRight": lambda: reboot(),
+            "BottomRight": lambda: restartControl(),
+            "CenterRight": lambda: exitThis()
         })
 
     def closeEvent(self, a0: QtGui.QCloseEvent) -> None:
