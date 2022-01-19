@@ -1,3 +1,6 @@
+import threading
+
+
 def bytesOR(b1,b2):
 	if len(b1) != len(b2):
 		raise ValueError("Array lengths are different")
@@ -15,17 +18,40 @@ def byteSet(by, value, position):
 	return by
 
 
+class CommandTimeout(Exception):
+	"""Timeout waiting for a response from a command"""
+
+
 class Command:
+	"""Wrapper for PTZ commands"""
 
 	def __init__(self, value, skipCompletion=False):
 		self.value = value
 		self.skipCompletion = skipCompletion
+		self._result = None
+		self._result_ready = threading.Event()
 
 	@property
 	def kwargs(self):
 		return {
 			"skipCompletion": self.skipCompletion,
 		}
+
+	def wait_result(self, timeout=2):
+		ready = self._result_ready.wait(timeout)
+		if not ready:
+			raise CommandTimeout
+
+	@property
+	def result(self):
+		"""Get command result"""
+		return self._result
+
+	@result.setter
+	def result(self, value):
+		"""Set command result"""
+		self._result = value
+		self._result_ready.set()
 
 	def __repr__(self):
 		return f"<Command: {self.value!r}>"

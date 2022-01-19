@@ -2,6 +2,9 @@ import asyncio
 import socket
 import logging
 import threading
+import struct
+import re
+import ipaddress
 from sony_visca import aioudp
 from sony_visca.visca_commands import Inquiry, Command
 from sony_visca.myqueue import MyQueue
@@ -39,7 +42,7 @@ class ViscaIPCamera:
 	_LOCAL_SOCK = None
 	_CONNECTED_CAMS = 0
 
-	def __init__(self, name, ip, mac, netmask="255.255.255.0", gateway="0.0.0.0", port=52381, simple_visca=False):
+	def __init__(self, name, ip, mac, netmask="255.255.255.0", gateway="0.0.0.0", port=52381, device_id=None, simple_visca=False):
 		self.sequenceNumber = 1 # starts at 1?
 		self.name = name
 		self.ip = ip
@@ -48,15 +51,13 @@ class ViscaIPCamera:
 		self.gateway = gateway
 		self.port = port
 		self.is_connected = False
+		self.device_id = device_id
 		self.simple_visca = simple_visca
 		self._remote_sock = None
 		self._queue_loop = None  # Handle to the Task running the queue processing loop
 
 	def __str__(self):
-		return self.name+" ("+self.ip+")"
-
-	# def __str__(self):
-	# 	return f"{self.name}({self.mac}) {self.ip}"
+		return f"{self.name}({self.mac}) {self.ip}"
 
 	def __repr__(self):
 		return f"<ViscaIPCamera name={self.name!r} mac={self.mac!r}>"
@@ -294,7 +295,55 @@ class ViscaIPCamera:
 					LOGGER.info("Found camera '%s' (%s) at IP %s", name, mac, addr[0])
 					cameras.append(cls(name, addr[0], mac))
 			except socket.timeout:
-				LOGGER.debug("End discover")
+				LOGGER.debug("End Sony discover")
 			return cameras
 		finally:
 			s.close()
+
+	@classmethod
+	def discoverNonSony(cls):
+		"""Discover non-Sony PTZ cameras over multicast"""
+		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+		responses = []
+		try:
+			# sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+			remote_addr = ipaddress.ip_address("239.255.255.251")
+			sock.setsockopt(
+				socket.IPPROTO_IP,
+				socket.IP_ADD_MEMBERSHIP,
+				struct.pack("4sl", remote_addr.packed, socket.INADDR_ANY),
+			)
+			sock.bind(("", 8005))
+			sock.sendto(b"SEARCH * UPGRADE", ("239.255.255.251", 8005))
+			try:
+				while True:
+					data, addr = sock.recvfrom(1024)
+					LOGGER.debug("Discover got data: %r", data)
+					responses.append(data)
+			except socket.timeout:
+				LOGGER.debug("End non-Sony discover")
+		finally:
+			sock.close()
+
+		regex = re.compile(
+			r"REPLY OK\s+Client ID:(?P<client_id>[A-Fa-f0-9]{32})?\s+Device ID:(?P<device_id>[A-Fa-f0-9]{32})\s+DHCP=(?P<dhcp>\d).*IP=(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+MASK=(?P<mask>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+GATEWAY=(?P<gateway>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+MAC=(?P<mac>([A-Fa-f0-9]{2}[:-]){5}[A-Fa-f0-9]{2})\s+FDNS=(?P<dns>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})",
+			re.DOTALL,
+		)
+		found = []
+		for resp in responses:
+			mo = regex.match((resp.decode()))
+			if mo:
+				info = mo.groupdict()
+				# We don't seem to get camera names back from discover here so bodge a bit of device id
+				LOGGER.info("Found camera '%s' (%s) at IP %s", info["device_id"], info["mac"], info["ip"])
+				found.append(cls(
+					info["device_id"][:8],
+					info["ip"],
+					info["mac"],
+					netmask=info["mask"],
+					gateway=info["gateway"],
+					port=1259,
+					device_id=info["device_id"],
+					simple_visca=True,
+				))
+		return found
