@@ -12,13 +12,21 @@ and set appropriate options to auto-show
 
 ### Useful running scripts
 
-```
+```bash
 #!/bin/bash
 cd /home/pi/PTZControllerUI
 
+RESTART_FILE=/tmp/norestart
+
 while true; do
-        /usr/bin/python3 main.py
-        printf "\n\nRestarting program...\n"
+    /usr/bin/python3 main.py
+    printf "\n\nCrash occured?\n\n"
+    if [ -f "$RESTART_FILE" ]; then
+        printf "norestart file detected, exiting for good"
+        break
+    fi
+    read -p "Press any key to restart"
+    printf "Restarting program...\n"
 done
 ```
 ```
