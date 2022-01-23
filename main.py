@@ -188,9 +188,9 @@ class MainScreen(QMainWindow):
             log.warning("Skipping camera command, not connected!")
             return
         if isinstance(command, Command):
-            self.selectedCamera.queueCommands(command, override=False)
+            self.selectedCamera.queueCommands(command, override=True)
         else:
-            self.selectedCamera.queueCommands(Command(command, **kwargs), override=False)
+            self.selectedCamera.queueCommands(Command(command, **kwargs), override=True)
 
     def getManualCamerasFromdb(self):
         """Get camera objects from DB data"""

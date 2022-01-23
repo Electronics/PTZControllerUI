@@ -175,6 +175,8 @@ class ViscaIPCamera:
 				await self._sendCommand(cmd)
 			except Exception:
 				LOGGER.exception("Command failed: %r", cmd)
+			# Camera times out if you send commands too quickly after an ack
+			await asyncio.sleep(0.05)
 			# We should really call task done after a get() but my clearing of the queue in MyQueue breaks the counting.
 			#   So for now we'll just not bother given we never use join()
 			# self.cmd_queue.task_done()
