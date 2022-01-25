@@ -165,6 +165,7 @@ class SerialControl(QThread):
                         elif command=="R":
                             button = int(dataSplit["num0"]) * 8 + int(dataSplit["num1"])
                             log.debug("Button Release %d",button)
+                            self.buttonReleaseSignal.emit(button)
                         elif command=="BOOT":
                             restX = int(dataSplit["num0"])
                             restY = int(dataSplit["num1"])

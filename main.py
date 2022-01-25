@@ -89,6 +89,7 @@ class MainScreen(QMainWindow):
         self.serial = SerialControl()
         self.serial.uiSignal.connect(self.UISignalReceiver)
         self.serial.buttonPressSignal.connect(self.ButtonControl.decodeButton)
+        self.serial.buttonReleaseSignal.connect(self.ButtonControl.decodeButtonRelease)
         self.serial.cameraControl.connect(self.doCameraCommand)
         self.serial.start()
 
@@ -431,6 +432,9 @@ class MainScreen(QMainWindow):
             self.dialogBox("Home camera - are you sure?",onConfirm)
 
         def changeIP():
+            if not self.selectedCamera:
+                log.info("No camera selected to change IP!")
+                return
             #todo get old ip
             def setSubnet(newSubnet):
                 if newSubnet==None:

@@ -1,5 +1,6 @@
 import logging
 
+from PyQt5 import QtCore
 from PyQt5.QtCore import QObject
 
 log = logging.getLogger("ButtonControl")
@@ -7,7 +8,8 @@ log.setLevel(logging.INFO)
 
 
 class ButtonControl(QObject):
-    functionDict = {} # a way of dynamically changing what the buttons do in a nice-ish way
+    functionPressDict = {} # a way of dynamically changing what the buttons do in a nice-ish way
+    functionRelaseDict = {}
     shortcutDict = {} # when shortcuts (numpad) is active for presets
     def __init__(self, parent):
         super().__init__()
@@ -86,148 +88,77 @@ class ButtonControl(QObject):
             self.typingString = self.typingString[:self.typingPos] + self.typingStringOriginal[self.typingPos] + self.typingString[self.typingPos + 1:]
         self.typingUpdate()
 
-    def ButtonTopLeft(self,event=None):
-        log.debug("Button Top Left Pressed")
-        if "TopLeft" in self.functionDict:
-            self.functionDict["TopLeft"]()
-    def ButtonMidLeft(self,event=None):
-        log.debug("Button Mid Left Pressed")
-        if "MidLeft" in self.functionDict:
-            self.functionDict["MidLeft"]()
-    def ButtonBottomLeft(self,event=None):
-        log.debug("Button Bottom Left Pressed")
-        if "BottomLeft" in self.functionDict:
-            self.functionDict["BottomLeft"]()
-    def ButtonCenterLeft(self,event=None):
-        log.debug("Button Center Left Pressed")
-        if "CenterLeft" in self.functionDict:
-            self.functionDict["CenterLeft"]()
-    def ButtonCenterMid(self,event=None):
-        log.debug("Button Center Mid Pressed")
-        if "CenterMid" in self.functionDict:
-            self.functionDict["CenterMid"]()
-    def ButtonCenterRight(self,event=None):
-        log.debug("Button Center Right Pressed")
-        if "CenterRight" in self.functionDict:
-            self.functionDict["CenterRight"]()
-    def ButtonBottomRight(self,event=None):
-        log.debug("Button Bottom Right Pressed")
-        if "BottomRight" in self.functionDict:
-            self.functionDict["BottomRight"]()
-    def ButtonMidRight(self,event=None):
-        log.debug("Button Mid Right Pressed")
-        if "MidRight" in self.functionDict:
-            self.functionDict["MidRight"]()
-    def ButtonTopRight(self,event=None):
-        log.debug("Button Top Right Pressed")
-        if "TopRight" in self.functionDict:
-            self.functionDict["TopRight"]()
-    def ButtonNext(self,event=None):
-        log.debug("Button Next Pressed")
-        if "Next" in self.functionDict:
-            self.functionDict["Next"]()
-    def ButtonPrev(self,event=None):
-        log.debug("Button Prev Pressed")
-        if "Prev" in self.functionDict:
-            self.functionDict["Prev"]()
+    def buttonEvent(self, button, release=False):
+        if release:
+            functionDict = self.functionRelaseDict
+        else:
+            functionDict = self.functionPressDict
+        if isinstance(button, int):
+            # numpad
+            if button==-1:
+                # backspace
+                self.backspace()
+            elif button==10:
+                # enter
+                if self.typingPos >= 0:
+                    retStr = self.UI.typingInput.text()
+                    self.typingOff()
+                    # validity should be checked in the callback
+                    # as well as any feedback to the user
+                    self.typingCallback(retStr)
+                else:
+                    if "Enter" in functionDict:
+                        functionDict["Enter"]()
+            else:
+                if self.shortcutsActive:
+                    self.shortcutDict[str(button)]()
+                else:
+                    self.typeChar(str(button))
+        else:
+            s = str(button)
+            if s in functionDict:
+                functionDict[s]()
 
-    def Button0(self,event=None):
-        if self.shortcutsActive:
-            self.shortcutDict["0"]()
-        else:
-            self.typeChar("0")
-    def Button1(self,event=None):
-        if self.shortcutsActive:
-            self.shortcutDict["1"]()
-        else:
-            self.typeChar("1")
-    def Button2(self,event=None):
-        if self.shortcutsActive:
-            self.shortcutDict["2"]()
-        else:
-            self.typeChar("2")
-    def Button3(self,event=None):
-        if self.shortcutsActive:
-            self.shortcutDict["3"]()
-        else:
-            self.typeChar("3")
-    def Button4(self,event=None):
-        if self.shortcutsActive:
-            self.shortcutDict["4"]()
-        else:
-            self.typeChar("4")
-    def Button5(self,event=None):
-        if self.shortcutsActive:
-            self.shortcutDict["5"]()
-        else:
-            self.typeChar("5")
-    def Button6(self,event=None):
-        if self.shortcutsActive:
-            self.shortcutDict["6"]()
-        else:
-            self.typeChar("6")
-    def Button7(self,event=None):
-        if self.shortcutsActive:
-            self.shortcutDict["7"]()
-        else:
-            self.typeChar("7")
-    def Button8(self,event=None):
-        if self.shortcutsActive:
-            self.shortcutDict["8"]()
-        else:
-            self.typeChar("8")
-    def Button9(self,event=None):
-        if self.shortcutsActive:
-            self.shortcutDict["9"]()
-        else:
-            self.typeChar("9")
-    def ButtonClear(self,event=None):
-        self.backspace()
-    def ButtonEnter(self, event=None):
-        if self.typingPos>=0:
-            retStr = self.UI.typingInput.text()
-            self.typingOff()
-            # validity should be checked in the callback
-            # as well as any feedback to the user
-            self.typingCallback(retStr)
-        else:
-            if "Enter" in self.functionDict:
-                self.functionDict["Enter"]()
+    def guiButtonEvent(self, event, button):
+        if event.button() == QtCore.Qt.LeftButton:
+            self.buttonEvent(button)
+        elif event.button() == QtCore.Qt.RightButton:
+            self.buttonEvent(button, release=True)
 
     def connectUIButtons(self):
-        self.UI.labelTopLeft.mousePressEvent = self.ButtonTopLeft
-        self.UI.labelMidLeft.mousePressEvent = self.ButtonMidLeft
-        self.UI.labelBottomLeft.mousePressEvent = self.ButtonBottomLeft
-        self.UI.labelCenterLeft.mousePressEvent = self.ButtonCenterLeft
-        self.UI.labelCenterMid.mousePressEvent = self.ButtonCenterMid
-        self.UI.labelCenterRight.mousePressEvent = self.ButtonCenterRight
-        self.UI.labelBottomRight.mousePressEvent = self.ButtonBottomRight
-        self.UI.labelMidRight.mousePressEvent = self.ButtonMidRight
-        self.UI.labelTopRight.mousePressEvent = self.ButtonTopRight
+        self.UI.labelTopLeft.mousePressEvent = lambda event: self.guiButtonEvent(event,"TopLeft")
+        self.UI.labelMidLeft.mousePressEvent = lambda event: self.guiButtonEvent(event,"MidLeft")
+        self.UI.labelBottomLeft.mousePressEvent = lambda event: self.guiButtonEvent(event,"BottomLeft")
+        self.UI.labelCenterLeft.mousePressEvent = lambda event: self.guiButtonEvent(event,"CenterLeft")
+        self.UI.labelCenterMid.mousePressEvent = lambda event: self.guiButtonEvent(event,"CenterMid")
+        self.UI.labelCenterRight.mousePressEvent = lambda event: self.guiButtonEvent(event,"CenterRight")
+        self.UI.labelBottomRight.mousePressEvent = lambda event: self.guiButtonEvent(event,"BottomRight")
+        self.UI.labelMidRight.mousePressEvent = lambda event: self.guiButtonEvent(event,"MidRight")
+        self.UI.labelTopRight.mousePressEvent = lambda event: self.guiButtonEvent(event,"TopRight")
 
         # "debug" buttons
-        self.UI.buttonPrev.clicked.connect(self.ButtonPrev)
-        self.UI.buttonNext.clicked.connect(self.ButtonNext)
-        self.UI.button0.clicked.connect(self.Button0)
-        self.UI.button1.clicked.connect(self.Button1)
-        self.UI.button2.clicked.connect(self.Button2)
-        self.UI.button3.clicked.connect(self.Button3)
-        self.UI.button4.clicked.connect(self.Button4)
-        self.UI.button5.clicked.connect(self.Button5)
-        self.UI.button6.clicked.connect(self.Button6)
-        self.UI.button7.clicked.connect(self.Button7)
-        self.UI.button8.clicked.connect(self.Button8)
-        self.UI.button9.clicked.connect(self.Button9)
-        self.UI.buttonClear.clicked.connect(self.ButtonClear)
-        self.UI.buttonEnter.clicked.connect(self.ButtonEnter)
+        self.UI.buttonPrev.clicked.connect(lambda: self.buttonEvent("Prev"))
+        self.UI.buttonNext.clicked.connect(lambda: self.buttonEvent("Next"))
+        self.UI.button0.clicked.connect(lambda: self.buttonEvent(0))
+        self.UI.button1.clicked.connect(lambda: self.buttonEvent(1))
+        self.UI.button2.clicked.connect(lambda: self.buttonEvent(2))
+        self.UI.button3.clicked.connect(lambda: self.buttonEvent(3))
+        self.UI.button4.clicked.connect(lambda: self.buttonEvent(4))
+        self.UI.button5.clicked.connect(lambda: self.buttonEvent(5))
+        self.UI.button6.clicked.connect(lambda: self.buttonEvent(6))
+        self.UI.button7.clicked.connect(lambda: self.buttonEvent(7))
+        self.UI.button8.clicked.connect(lambda: self.buttonEvent(8))
+        self.UI.button9.clicked.connect(lambda: self.buttonEvent(9))
+        self.UI.buttonClear.clicked.connect(lambda: self.buttonEvent(-1))
+        self.UI.buttonEnter.clicked.connect(lambda: self.buttonEvent(10))
 
     def connectFunctions(self, fDict):
-        self.functionDict = fDict
+        self.functionPressDict = fDict
 
     def connectShortcutFunctions(self, fDict):
         self.shortcutDict = fDict
 
-    def decodeButton(self, num, press=True):
+    def decodeButton(self, num, press=True): # press=False is a release event
         buttonMap = [
             self.Button1, # 0,0
             self.Button2,
@@ -254,5 +185,6 @@ class ButtonControl(QObject):
             self.ButtonBottomRight,
             self.ButtonClear
         ]
-        if press:
-            buttonMap[num]()
+        buttonMap[num](release=not press)
+    def decodeButtonRelease(self, num):
+        self.decodeButton(num,press=False)
