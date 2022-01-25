@@ -119,11 +119,8 @@ class ButtonControl(QObject):
             if s in functionDict:
                 functionDict[s]()
 
-    def guiButtonEvent(self, event, button):
-        if event.button() == QtCore.Qt.LeftButton:
-            self.buttonEvent(button)
-        elif event.button() == QtCore.Qt.RightButton:
-            self.buttonEvent(button, release=True)
+    def guiButtonEvent(self, event, button, release=False):
+        self.buttonEvent(button,release=release)
 
     def connectUIButtons(self):
         self.UI.labelTopLeft.mousePressEvent = lambda event: self.guiButtonEvent(event,"TopLeft")
@@ -135,6 +132,15 @@ class ButtonControl(QObject):
         self.UI.labelBottomRight.mousePressEvent = lambda event: self.guiButtonEvent(event,"BottomRight")
         self.UI.labelMidRight.mousePressEvent = lambda event: self.guiButtonEvent(event,"MidRight")
         self.UI.labelTopRight.mousePressEvent = lambda event: self.guiButtonEvent(event,"TopRight")
+        self.UI.labelTopLeft.mouseReleaseEvent = lambda event: self.guiButtonEvent(event, "TopLeft", release=True)
+        self.UI.labelMidLeft.mouseReleaseEvent = lambda event: self.guiButtonEvent(event, "MidLeft", release=True)
+        self.UI.labelBottomLeft.mouseReleaseEvent = lambda event: self.guiButtonEvent(event, "BottomLeft", release=True)
+        self.UI.labelCenterLeft.mouseReleaseEvent = lambda event: self.guiButtonEvent(event, "CenterLeft", release=True)
+        self.UI.labelCenterMid.mouseReleaseEvent = lambda event: self.guiButtonEvent(event, "CenterMid", release=True)
+        self.UI.labelCenterRight.mouseReleaseEvent = lambda event: self.guiButtonEvent(event, "CenterRight", release=True)
+        self.UI.labelBottomRight.mouseReleaseEvent = lambda event: self.guiButtonEvent(event, "BottomRight", release=True)
+        self.UI.labelMidRight.mouseReleaseEvent = lambda event: self.guiButtonEvent(event, "MidRight", release=True)
+        self.UI.labelTopRight.mouseReleaseEvent = lambda event: self.guiButtonEvent(event, "TopRight", release=True)
 
         # "debug" buttons
         self.UI.buttonPrev.clicked.connect(lambda: self.buttonEvent("Prev"))

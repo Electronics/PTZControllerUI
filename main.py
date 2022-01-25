@@ -111,7 +111,7 @@ class MainScreen(QMainWindow):
             self.ButtonControl.escape()
         elif key == QtCore.Qt.Key_Return or key == QtCore.Qt.Key_Enter:
             log.debug("Keyboard Enter pressed")
-            self.ButtonControl.ButtonEnter()
+            self.ButtonControl.buttonEvent(10)
 
     def debug(self):
         temp = ViscaIPCamera("LaurieC3","192.168.0.68","DC:ED:84:A1:9A:77",simple_visca=True, port=1259)
