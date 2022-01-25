@@ -152,8 +152,11 @@ class ButtonControl(QObject):
         self.UI.buttonClear.clicked.connect(lambda: self.buttonEvent(-1))
         self.UI.buttonEnter.clicked.connect(lambda: self.buttonEvent(10))
 
-    def connectFunctions(self, fDict):
-        self.functionPressDict = fDict
+    def connectFunctions(self, pDict, rDict=None): # pressed, released dicts
+        self.functionPressDict = pDict
+        self.functionRelaseDict = {}
+        if rDict:
+            self.functionRelaseDict = rDict
 
     def connectShortcutFunctions(self, fDict):
         self.shortcutDict = fDict
