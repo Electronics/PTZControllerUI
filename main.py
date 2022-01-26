@@ -10,7 +10,7 @@ from getmac import get_mac_address
 from PyQt5 import QtCore, QtWidgets, QtGui
 from PyQt5.QtCore import pyqtSignal, QTimer
 from PyQt5.QtGui import QColor, QFont
-from PyQt5.QtWidgets import QApplication, QGraphicsScene, QGraphicsRectItem, QListWidgetItem, QMainWindow, QFrame, QLabel, QHBoxLayout, QPushButton, QSizePolicy, QVBoxLayout
+from PyQt5.QtWidgets import QApplication, QGraphicsScene, QGraphicsRectItem, QListWidgetItem, QMainWindow, QFrame, QLabel, QHBoxLayout, QPushButton, QSizePolicy, QVBoxLayout, QGridLayout
 from PyQt5.uic import loadUi
 
 import database
@@ -336,14 +336,37 @@ class MainScreen(QMainWindow):
                 self.doCameraCommand(Command(Command.MemoryRecall(num)))
         self.ButtonControl.input("","Recall Preset:",confirm)
 
-    def isCameraAutoFocus(self):
-        try:
-            if self.selectedCamera.isAutoFocusEnabled:
-                return True
+    def toggleParameter(self, parameter, qwidget, textTrue, textFalse, commandTrue=None, commandFalse=None, toggle=True, default=True):
+        # toggles a parameter on a camera and/or checks what state the paramters is in and udpdates relevent bits
+        def checkParameter(parameter):
+            #TODO: replace this with an inquiry against the camera?
+            try:
+                if parameter in self.selectedCamera.parameters:
+                    if parameter:
+                        return True
+                    else:
+                        return False
+            except AttributeError:
+                self.selectedCamera.parameters = {}
+            return default #default normally is True
+
+        currentState = checkParameter(parameter)
+        if toggle:
+            if commandTrue is None or commandFalse is None:
+                raise SyntaxError("Command missing from toggle parameter call!")
+            currentState = not currentState
+            if currentState:
+                self.doCameraCommand(commandTrue)
+                self.selectedCamera.parameters[parameter] = True
             else:
-                return False
-        except AttributeError:
-            return True
+                self.doCameraCommand(commandFalse)
+                self.selectedCamera.parameters[parameter] = False
+
+        # update UI elements
+        if currentState:
+            qwidget.setText(textTrue)
+        else:
+            qwidget.setText(textFalse)
 
     def changeView(self, newViewFunc=None): # without a new view function, this can just clear popups
         self.textView.hide()
@@ -605,7 +628,6 @@ class MainScreen(QMainWindow):
                 self.ButtonControl.setShortcutActive(True)
                 self.labelBottomRight.setText("Preset Shortcuts On")
 
-
         self.ButtonControl.connectFunctions({
             "TopLeft": lambda: self.discoverCameras(),
             "MidLeft": lambda: self.changeView(self.cameraConfigScreen),
@@ -632,21 +654,7 @@ class MainScreen(QMainWindow):
         self.labelMidRight.setText("Focus Near")
         self.labelCurrentScreen.setText("Focus Menu")
 
-        def updateFocusState(swap=None):
-            currentState = self.isCameraAutoFocus()
-            if swap:
-                self.doCameraCommand(Command.ManualFocus if currentState else Command.AutoFocus)
-                currentState = not currentState
-            if currentState:
-                self.labelTopRight.setText("Auto Focus")
-                self.doCameraCommand(Command.AutoFocus)
-                self.selectedCamera.isAutoFocusEnabled = True
-            else:
-                self.labelTopRight.setText("Manual Focus")
-                self.doCameraCommand(Command.ManualFocus)
-                self.selectedCamera.isAutoFocusEnabled = False
-
-        updateFocusState()
+        self.toggleParameter("autofocus",self.labelTopRight,"Auto Focus", "Manual Focus",toggle=False)
 
         self.ButtonControl.connectFunctions({
             "TopLeft": lambda: self.changeView(self.homeScreen),
@@ -657,7 +665,7 @@ class MainScreen(QMainWindow):
             "CenterRight": lambda: self.doCameraCommand(Command.FocusOnePush),
             "BottomRight": lambda: self.doCameraCommand(Command.FocusFar),
             "MidRight": lambda: self.doCameraCommand(Command.FocusNear),
-            "TopRight": lambda: updateFocusState(swap=True),
+            "TopRight": lambda: self.toggleParameter("autofocus",self.labelTopRight,"Auto Focus", "Manual Focus",Command.AutoFocus, Command.ManualFocus),
             "Next": lambda: self.nextCamera(),
             "Prev": lambda: self.nextCamera(-1),
         },{
@@ -715,6 +723,84 @@ class MainScreen(QMainWindow):
             "Prev": lambda: self.nextCamera(-1),
         })
 
+    def apertureScreen(self):
+        self.labelTopLeft.setText("Home Screen")
+        self.labelMidLeft.setText("Camera Config")
+        self.labelBottomLeft.setText("Settings")
+        self.labelCenterLeft.setText("Recall Preset")
+        self.labelCenterMid.setText("Store Preset")
+        self.labelCenterRight.setText("")
+        self.labelBottomRight.setText("Down")
+        self.labelMidRight.setText("Up")
+        self.labelTopRight.setText("Reset")
+        self.labelCurrentScreen.setText("Aperture (Gain?)")
+
+        self.ButtonControl.connectFunctions({
+            "TopLeft": lambda: self.changeView(self.homeScreen),
+            "MidLeft": lambda: self.changeView(self.cameraConfigScreen),
+            "BottomLeft": lambda: self.changeView(self.networkConfigScreen),
+            "CenterLeft": lambda: self.recallPreset(),
+            "CenterMid": lambda: self.storePreset(),
+            "BottomRight": lambda: self.doCameraCommand(Command.ApertureDown),
+            "MidRight": lambda: self.doCameraCommand(Command.ApertureUp),
+            "TopRight": lambda: self.doCameraCommand(Command.ApertureReset),
+            "Next": lambda: self.nextCamera(),
+            "Prev": lambda: self.nextCamera(-1),
+        })
+
+    def expCompScreen(self):
+        self.labelTopLeft.setText("Home Screen")
+        self.labelMidLeft.setText("Camera Config")
+        self.labelBottomLeft.setText("Settings")
+        self.labelCenterLeft.setText("Recall Preset")
+        self.labelCenterMid.setText("Store Preset")
+        self.labelCenterRight.setText("Reset")
+        self.labelBottomRight.setText("Down")
+        self.labelMidRight.setText("Up")
+
+        self.labelCurrentScreen.setText("Exposure Compensation")
+
+        self.toggleParameter("exposurecomp",self.labelTopRight,"ExpComp On", "ExpComp Off",toggle=False)
+
+        self.ButtonControl.connectFunctions({
+            "TopLeft": lambda: self.changeView(self.homeScreen),
+            "MidLeft": lambda: self.changeView(self.cameraConfigScreen),
+            "BottomLeft": lambda: self.changeView(self.networkConfigScreen),
+            "CenterLeft": lambda: self.recallPreset(),
+            "CenterMid": lambda: self.storePreset(),
+            "CenterRight": lambda: self.doCameraCommand(Command.ExposureCompReset),
+            "BottomRight": lambda: self.doCameraCommand(Command.ExposureCompDown),
+            "MidRight": lambda: self.doCameraCommand(Command.ExposureCompUp),
+            "TopRight": lambda: self.toggleParameter("exposurecomp",self.labelTopRight,"ExpComp On", "ExpComp Off",Command.ExposureCompOn,Command.ExposureCompOff),
+            "Next": lambda: self.nextCamera(),
+            "Prev": lambda: self.nextCamera(-1),
+        })
+
+    def gainScreen(self):
+        self.labelTopLeft.setText("Home Screen")
+        self.labelMidLeft.setText("Camera Config")
+        self.labelBottomLeft.setText("Settings")
+        self.labelCenterLeft.setText("Recall Preset")
+        self.labelCenterMid.setText("Store Preset")
+        self.labelCenterRight.setText("")
+        self.labelBottomRight.setText("Down")
+        self.labelMidRight.setText("Up")
+        self.labelTopRight.setText("Reset")
+        self.labelCurrentScreen.setText("Gain")
+
+        self.ButtonControl.connectFunctions({
+            "TopLeft": lambda: self.changeView(self.homeScreen),
+            "MidLeft": lambda: self.changeView(self.cameraConfigScreen),
+            "BottomLeft": lambda: self.changeView(self.networkConfigScreen),
+            "CenterLeft": lambda: self.recallPreset(),
+            "CenterMid": lambda: self.storePreset(),
+            "BottomRight": lambda: self.doCameraCommand(Command.GainDown),
+            "MidRight": lambda: self.doCameraCommand(Command.GainUp),
+            "TopRight": lambda: self.doCameraCommand(Command.GainReset),
+            "Next": lambda: self.nextCamera(),
+            "Prev": lambda: self.nextCamera(-1),
+        })
+
     def extraMenu(self):
         cancelFrame = QFrame()
         cancelFrame.resize(self.size())
@@ -729,7 +815,7 @@ class MainScreen(QMainWindow):
         frame.setAutoFillBackground(True)
         layout = QVBoxLayout()
         buttonFrame = QFrame()
-        buttonLayout = QHBoxLayout()
+        buttonLayout = QGridLayout()
         buttonFrame.setLayout(buttonLayout)
         buttonFrame.setFont(QFont("MS Shell Dlg 2", 14))
         frame.setLayout(layout)
@@ -739,21 +825,72 @@ class MainScreen(QMainWindow):
         layout.addWidget(title)
         layout.addWidget(buttonFrame)
 
+        buttonExposure = QPushButton("\nExposure\n\n")
+        buttonExposure.clicked.connect(lambda event: buttonCallback("exposure"))
+        buttonWhiteBalance = QPushButton("\nWhite\nBalance\n")
+        buttonWhiteBalance.clicked.connect(lambda event: buttonCallback("whitebalance"))
+        buttonExpComp = QPushButton("\nExposure\nCompensation\n")
+        buttonExpComp.clicked.connect(lambda event: buttonCallback("expcomp"))
+        buttonGain = QPushButton("\nGain\n\n")
+        buttonGain.clicked.connect(lambda event: buttonCallback("gain"))
+        buttonBacklight = QPushButton("\nBacklight\nComp On\n")
+        buttonBacklight.clicked.connect(lambda event: buttonCallback("backlight"))
+        buttonDynamicRange = QPushButton("\nWide Dynamic\n\n")
+        buttonDynamicRange.clicked.connect(lambda event: buttonCallback("dynamicrange"))
+        buttonAperture = QPushButton("\nAperture\n(Gain?)\n")
+        buttonAperture.clicked.connect(lambda event: buttonCallback("aperture"))
+        buttonHighRes = QPushButton("\nHigh Resolution\nOn\n")
+        buttonHighRes.clicked.connect(lambda event: buttonCallback("highres"))
+        buttonNoiseReduction = QPushButton("\nNoise Reduction\n\n")
+        buttonNoiseReduction.clicked.connect(lambda event: buttonCallback("noisereduction"))
+        buttonHighSensitivity = QPushButton("\nHigh Sensitivity\nOn\n")
+        buttonHighSensitivity.clicked.connect(lambda event: buttonCallback("highsensitivity"))
+        buttonInfoDisplay = QPushButton("\nInfo Display\nOff\n")
+        buttonInfoDisplay.clicked.connect(lambda event: buttonCallback("infodisp"))
+        buttonLayout.addWidget(buttonExposure,0,0)
+        buttonLayout.addWidget(buttonWhiteBalance,0,1)
+        buttonLayout.addWidget(buttonExpComp,0,2)
+        buttonLayout.addWidget(buttonGain,0,3)
+        buttonLayout.addWidget(buttonBacklight,1,0)
+        buttonLayout.addWidget(buttonDynamicRange,1,1)
+        buttonLayout.addWidget(buttonAperture,1,2)
+        buttonLayout.addWidget(buttonHighRes,1,3)
+        buttonLayout.addWidget(buttonNoiseReduction,2,0)
+        buttonLayout.addWidget(buttonHighSensitivity,2,1)
+        buttonLayout.addWidget(buttonInfoDisplay,2,2)
+
         def buttonCallback(button):
+            # seperate callback function rather than lambdas as often in duplciates of this menu we want to run a command AND close the popup
             if button == "exposure":
                 self.changeView(self.exposureMenu)
             elif button == "whitebalance":
                 self.changeView(self.whitebalanceMenu)
+            elif button == "expcomp":
+                self.changeView(self.expCompScreen)
+            elif button == "gain":
+                self.changeView(self.gainScreen)
+            elif button == "backlight":
+                self.toggleParameter("backlightcomp",buttonBacklight,"\nBacklight\nComp On\n", "\nBacklight\nComp Off\n",Command.BacklightCompOn,Command.BacklightCompOff)
+            elif button == "dynamicrange":
+                self.changeView(self.dynamicRangeMenu)
+            elif button == "aperture":
+                self.changeView(self.apertureScreen)
+            elif button == "highres":
+                self.toggleParameter("highres",buttonHighRes,"\nHigh Resolution\nOn\n","\nHigh Resolution\nOff\n",Command.HighResolutionOn,Command.HighResolutionOff)
+            elif button == "noisereduction":
+                self.changeView(self.noiseReductionMenu)
+            elif button == "highsensitivity":
+                self.toggleParameter("highsens",buttonHighSensitivity,"\nHigh Sensitivity\nOn\n","\nHigh Sensitivity\nOff\n",Command.HighSensitivityOn,Command.HighSensitivityOff)
+            elif button == "infodisp":
+                self.toggleParameter("infodisp",buttonInfoDisplay,"\nInfo Display\nOn\n","\nInfo Display\nOff\n",Command.InfoDisplayOn,Command.InfoDisplayOff,default=False)
 
-        buttonExposure = QPushButton("\nExposure\n\n")
-        buttonExposure.clicked.connect(lambda event: buttonCallback("exposure"))
-        buttonWhiteBalance = QPushButton("\nWhite Balance\n\n")
-        buttonWhiteBalance.clicked.connect(lambda event: buttonCallback("whitebalance"))
-        buttonLayout.addWidget(buttonExposure)
-        buttonLayout.addWidget(buttonWhiteBalance)
+        self.toggleParameter("backlightcomp",buttonBacklight,"\nBacklight\nComp On\n", "\nBacklight\nComp Off\n",toggle=False)
+        self.toggleParameter("highres", buttonHighRes, "\nHigh Resolution\nOn\n", "\nHigh Resolution\nOff\n", toggle=False)
+        self.toggleParameter("highsens", buttonHighSensitivity, "\nHigh Sensitivity\nOn\n", "\nHigh Sensitivity\nOff\n", toggle=False)
+        self.toggleParameter("infodisp", buttonInfoDisplay, "\nInfo Display\nOn\n", "\nInfo Display\nOff\n", toggle=False, default=False)
 
         self.layout().addWidget(frame)
-        frame.setFixedSize(300, 200)
+        frame.setFixedSize(700, 400)
         frame.move(self.width() / 2 - frame.width() / 2, self.height() / 2 - frame.height() / 2)
         self.tempUI.append(frame)
 
@@ -851,7 +988,7 @@ class MainScreen(QMainWindow):
 
         buttonAuto = QPushButton("\nAuto WB\n\n")
         buttonAuto.clicked.connect(lambda event: buttonCallback("auto"))
-        buttonAutoTrack = QPushButton("\nAuto Tracking\n\n")
+        buttonAutoTrack = QPushButton("\nAuto\nTracking\n")
         buttonAutoTrack.clicked.connect(lambda event: buttonCallback("autotrack"))
         buttonIndoor = QPushButton("\nIndoor\n\n")
         buttonIndoor.clicked.connect(lambda event: buttonCallback("indoor"))
@@ -870,6 +1007,122 @@ class MainScreen(QMainWindow):
 
         self.layout().addWidget(frame)
         frame.setFixedSize(600, 200)
+        frame.move(self.width() / 2 - frame.width() / 2, self.height() / 2 - frame.height() / 2)
+        self.tempUI.append(frame)
+
+    def dynamicRangeMenu(self):
+        cancelFrame = QFrame()
+        cancelFrame.resize(self.size())
+        cancelFrame.mousePressEvent = lambda e: self.changeView()
+        self.layout().addWidget(cancelFrame)
+        self.tempUI.append(cancelFrame)
+
+        frame = QFrame()
+        frame.setFrameShape(QFrame.Box)
+        frame.setFrameShadow(QFrame.Raised)
+        frame.setLineWidth(5)
+        frame.setAutoFillBackground(True)
+        layout = QVBoxLayout()
+        buttonFrame = QFrame()
+        buttonLayout = QHBoxLayout()
+        buttonFrame.setLayout(buttonLayout)
+        buttonFrame.setFont(QFont("MS Shell Dlg 2", 14))
+        frame.setLayout(layout)
+        title = QLabel("Wide Dynamic Range")
+        title.setFont(QFont("MS Shell Dlg 2", 20))
+        title.setAlignment(QtCore.Qt.AlignCenter)
+        layout.addWidget(title)
+        layout.addWidget(buttonFrame)
+
+        def buttonCallback(button):
+            if button == "off":
+                self.doCameraCommand(Command.WideDynamicRangeOff)
+            elif button == "low":
+                self.doCameraCommand(Command.WideDynamicRangeLow)
+            elif button == "medium":
+                self.doCameraCommand(Command.WideDynamicRangeMed)
+            elif button == "high":
+                self.doCameraCommand(Command.WideDynamicRangeHigh)
+            self.changeView()  # close the popup
+
+        buttonOff = QPushButton("\nOff\n\n")
+        buttonOff.clicked.connect(lambda event: buttonCallback("off"))
+        buttonLow = QPushButton("\nLow\n\n")
+        buttonLow.clicked.connect(lambda event: buttonCallback("low"))
+        buttonMedium = QPushButton("\nMedium\n\n")
+        buttonMedium.clicked.connect(lambda event: buttonCallback("medium"))
+        buttonHigh = QPushButton("\nHigh\n\n")
+        buttonHigh.clicked.connect(lambda event: buttonCallback("High"))
+        buttonLayout.addWidget(buttonOff)
+        buttonLayout.addWidget(buttonLow)
+        buttonLayout.addWidget(buttonMedium)
+        buttonLayout.addWidget(buttonHigh)
+
+        self.layout().addWidget(frame)
+        frame.setFixedSize(600, 200)
+        frame.move(self.width() / 2 - frame.width() / 2, self.height() / 2 - frame.height() / 2)
+        self.tempUI.append(frame)
+
+    def noiseReductionMenu(self):
+        cancelFrame = QFrame()
+        cancelFrame.resize(self.size())
+        cancelFrame.mousePressEvent = lambda e: self.changeView()
+        self.layout().addWidget(cancelFrame)
+        self.tempUI.append(cancelFrame)
+
+        frame = QFrame()
+        frame.setFrameShape(QFrame.Box)
+        frame.setFrameShadow(QFrame.Raised)
+        frame.setLineWidth(5)
+        frame.setAutoFillBackground(True)
+        layout = QVBoxLayout()
+        buttonFrame = QFrame()
+        buttonLayout = QHBoxLayout()
+        buttonFrame.setLayout(buttonLayout)
+        buttonFrame.setFont(QFont("MS Shell Dlg 2", 14))
+        frame.setLayout(layout)
+        title = QLabel("Noise Reduction Level")
+        title.setFont(QFont("MS Shell Dlg 2", 20))
+        title.setAlignment(QtCore.Qt.AlignCenter)
+        layout.addWidget(title)
+        layout.addWidget(buttonFrame)
+
+        def buttonCallback(button):
+            if button == "off":
+                self.doCameraCommand(Command.NoiseReductionOff)
+            elif button == "1":
+                self.doCameraCommand(Command.NoiseReduction(1))
+            elif button == "2":
+                self.doCameraCommand(Command.NoiseReduction(2))
+            elif button == "3":
+                self.doCameraCommand(Command.NoiseReduction(3))
+            elif button == "4":
+                self.doCameraCommand(Command.NoiseReduction(4))
+            elif button == "5":
+                self.doCameraCommand(Command.NoiseReduction(5))
+            self.changeView()  # close the popup
+
+        buttonOff = QPushButton("\nOff\n\n")
+        buttonOff.clicked.connect(lambda event: buttonCallback("off"))
+        button1 = QPushButton("\n1\n\n")
+        button1.clicked.connect(lambda event: buttonCallback("1"))
+        button2 = QPushButton("\n2\n\n")
+        button2.clicked.connect(lambda event: buttonCallback("2"))
+        button3 = QPushButton("\n3\n\n")
+        button3.clicked.connect(lambda event: buttonCallback("3"))
+        button4 = QPushButton("\n4\n\n")
+        button4.clicked.connect(lambda event: buttonCallback("4"))
+        button5 = QPushButton("\n5\n\n")
+        button5.clicked.connect(lambda event: buttonCallback("5"))
+        buttonLayout.addWidget(buttonOff)
+        buttonLayout.addWidget(button1)
+        buttonLayout.addWidget(button2)
+        buttonLayout.addWidget(button3)
+        buttonLayout.addWidget(button4)
+        buttonLayout.addWidget(button5)
+
+        self.layout().addWidget(frame)
+        frame.setFixedSize(500, 200)
         frame.move(self.width() / 2 - frame.width() / 2, self.height() / 2 - frame.height() / 2)
         self.tempUI.append(frame)
 
