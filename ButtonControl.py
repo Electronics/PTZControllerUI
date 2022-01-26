@@ -97,7 +97,10 @@ class ButtonControl(QObject):
             # numpad
             if button==-1:
                 # backspace
-                self.backspace()
+                if self.typingPos >=0:
+                    self.backspace()
+                else:
+                    self.UI.changeView()
             elif button==10:
                 # enter
                 if self.typingPos >= 0:

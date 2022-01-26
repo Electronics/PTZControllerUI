@@ -9,8 +9,8 @@ from getmac import get_mac_address
 
 from PyQt5 import QtCore, QtWidgets, QtGui
 from PyQt5.QtCore import pyqtSignal, QTimer
-from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QApplication, QGraphicsScene, QGraphicsRectItem, QListWidgetItem, QMainWindow
+from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtWidgets import QApplication, QGraphicsScene, QGraphicsRectItem, QListWidgetItem, QMainWindow, QFrame, QLabel, QHBoxLayout, QPushButton, QSizePolicy, QVBoxLayout
 from PyQt5.uic import loadUi
 
 import database
@@ -48,6 +48,8 @@ class MainScreen(QMainWindow):
         self.selectedCamera = None
         self.selectedCameraName = ""
         self.cameras = {}
+
+        self.tempUI = [] # list in which to store temporary UI items that need to be removed on a page change
 
         loadUi("MainUI.ui", self)
         self.ButtonControl = ButtonControl(self)
@@ -266,7 +268,6 @@ class MainScreen(QMainWindow):
                     self.cameraListWidget.addItem(cameraItem)
 
                 else:
-                    print("FUCK I NEED TO REDO THIS BIT")
                     # camera already existed (presumably)
                     oldName = known_names[known_ips.index(cam.ip)]
                     self.cameras.pop(oldName)
@@ -344,67 +345,39 @@ class MainScreen(QMainWindow):
         except AttributeError:
             return True
 
+    def changeView(self, newViewFunc=None): # without a new view function, this can just clear popups
+        self.textView.hide()
+        for item in self.tempUI:
+            item.setParent(None)
+            item.deleteLater()
+        self.tempUI.clear()
+        if newViewFunc is not None:
+            newViewFunc()
+
     def homeScreen(self):
         self.labelTopLeft.setText("Discover Cameras")
         self.labelMidLeft.setText("Camera Config")
         self.labelBottomLeft.setText("Settings")
         self.labelCenterLeft.setText("Recall Preset")
         self.labelCenterMid.setText("Store Preset")
-        if self.isCameraAutoFocus():
-            self.labelCenterRight.setText("")
-            self.labelBottomRight.setText("")
-            self.labelMidRight.setText("")
-            self.labelTopRight.setText("Auto Focus")
-        else:
-            self.labelCenterRight.setText("Push Focus")
-            self.labelBottomRight.setText("Focus Far")
-            self.labelMidRight.setText("Focus Near")
-            self.labelTopRight.setText("Manual Focus")
+        self.labelCenterRight.setText("Extra Settings")
+        self.labelBottomRight.setText("Iris")
+        self.labelMidRight.setText("Shutter")
+        self.labelTopRight.setText("Focus")
         self.labelCurrentScreen.setText("Home")
 
-        self.textView.hide()
 
-        def toggleAutoFocus():
-            if not self.selectedCamera:
-                return
-            if self.isCameraAutoFocus():
-                log.info("Turning autofocus off")
-                self.selectedCamera.isAutoFocusEnabled = False
-                self.selectedCamera.queueCommands(Command(Command.ManualFocus))
-                self.labelCenterRight.setText("Push Focus")
-                self.labelBottomRight.setText("Focus Far")
-                self.labelMidRight.setText("Focus Near")
-                self.labelTopRight.setText("Manual Focus")
-            else:
-                log.info("Turning autofocus on")
-                self.selectedCamera.isAutoFocusEnabled = True
-                self.selectedCamera.queueCommands(Command(Command.AutoFocus))
-                self.labelCenterRight.setText("")
-                self.labelBottomRight.setText("")
-                self.labelMidRight.setText("")
-                self.labelTopRight.setText("Auto Focus")
-        def focusNear():
-            if not self.isCameraAutoFocus():
-                self.selectedCamera.queueCommands(Command(Command.FocusNear))
-                QTimer.singleShot(120, lambda:self.selectedCamera.queueCommands(Command(Command.FocusStop)))
-        def focusFar():
-            if not self.isCameraAutoFocus():
-                self.selectedCamera.queueCommands(Command(Command.FocusFar))
-                QTimer.singleShot(120, lambda: self.selectedCamera.queueCommands(Command(Command.FocusStop)))
-        def focusPush():
-            if not self.isCameraAutoFocus():
-                self.selectedCamera.queueCommands(Command(Command.FocusOnePush))
 
         self.ButtonControl.connectFunctions({
             "TopLeft": lambda: self.discoverCameras(),
-            "MidLeft": lambda: self.cameraConfigScreen(),
-            "BottomLeft": lambda: self.networkConfigScreen(),
+            "MidLeft": lambda: self.changeView(self.cameraConfigScreen),
+            "BottomLeft": lambda: self.changeView(self.networkConfigScreen),
             "CenterLeft": lambda: self.recallPreset(),
             "CenterMid": lambda: self.storePreset(),
-            "CenterRight": lambda: focusPush(),
-            "BottomRight": lambda: focusFar(),
-            "MidRight": lambda: focusNear(),
-            "TopRight": lambda: toggleAutoFocus(),
+            "CenterRight": lambda: self.changeView(self.extraMenu),
+            "BottomRight": lambda: self.changeView(self.irisScreen),
+            "MidRight": lambda: self.changeView(self.shutterScreen),
+            "TopRight": lambda: self.changeView(self.focusScreen),
             "Next": lambda: self.nextCamera(),
             "Prev": lambda: self.nextCamera(-1),
         })
@@ -486,8 +459,8 @@ class MainScreen(QMainWindow):
 
         self.ButtonControl.connectFunctions({
             "TopLeft": lambda: self.discoverCameras(),
-            "MidLeft": lambda: self.homeScreen(),
-            "BottomLeft": lambda: self.networkConfigScreen(),
+            "MidLeft": lambda: self.changeView(self.homeScreen),
+            "BottomLeft": lambda: self.changeView(self.networkConfigScreen),
             "MidRight": lambda: changeName(),
             "TopRight": lambda: changeIP(),
             "CenterLeft": lambda: self.recallPreset(),
@@ -635,18 +608,270 @@ class MainScreen(QMainWindow):
 
         self.ButtonControl.connectFunctions({
             "TopLeft": lambda: self.discoverCameras(),
-            "MidLeft": lambda: self.cameraConfigScreen(),
-            "BottomLeft": lambda: self.homeScreen(),
+            "MidLeft": lambda: self.changeView(self.cameraConfigScreen),
+            "BottomLeft": lambda: self.changeView(self.homeScreen),
             "BottomRight": lambda: swapShortcuts(),
             "MidRight": lambda: calibrateJoystick(),
             "TopRight": lambda: addCamera(),
             "CenterLeft": lambda: self.recallPreset(),
             "CenterMid": lambda: self.storePreset(),
-            "CenterRight": lambda: self.shutdownScreen(),
+            "CenterRight": lambda: self.changeView(self.shutdownScreen),
             "Next": lambda: self.nextCamera(),
             "Prev": lambda: self.nextCamera(-1),
             "Enter": lambda: finishCalibrate()
         })
+
+    def focusScreen(self):
+        self.labelTopLeft.setText("Home Screen")
+        self.labelMidLeft.setText("Camera Config")
+        self.labelBottomLeft.setText("Settings")
+        self.labelCenterLeft.setText("Recall Preset")
+        self.labelCenterMid.setText("Store Preset")
+        self.labelCenterRight.setText("Push Focus")
+        self.labelBottomRight.setText("Focus Far")
+        self.labelMidRight.setText("Focus Near")
+        self.labelCurrentScreen.setText("Focus Menu")
+
+        def updateFocusState(swap=None):
+            currentState = self.isCameraAutoFocus()
+            if swap:
+                self.doCameraCommand(Command.ManualFocus if currentState else Command.AutoFocus)
+                currentState = not currentState
+            if currentState:
+                self.labelTopRight.setText("Auto Focus")
+                self.doCameraCommand(Command.AutoFocus)
+                self.selectedCamera.isAutoFocusEnabled = True
+            else:
+                self.labelTopRight.setText("Manual Focus")
+                self.doCameraCommand(Command.ManualFocus)
+                self.selectedCamera.isAutoFocusEnabled = False
+
+        updateFocusState()
+
+        self.ButtonControl.connectFunctions({
+            "TopLeft": lambda: self.changeView(self.homeScreen),
+            "MidLeft": lambda: self.changeView(self.cameraConfigScreen),
+            "BottomLeft": lambda: self.changeView(self.networkConfigScreen),
+            "CenterLeft": lambda: self.recallPreset(),
+            "CenterMid": lambda: self.storePreset(),
+            "CenterRight": lambda: self.doCameraCommand(Command.FocusOnePush),
+            "BottomRight": lambda: self.doCameraCommand(Command.FocusFar),
+            "MidRight": lambda: self.doCameraCommand(Command.FocusNear),
+            "TopRight": lambda: updateFocusState(swap=True),
+            "Next": lambda: self.nextCamera(),
+            "Prev": lambda: self.nextCamera(-1),
+        },{
+            "BottomRight": lambda: self.doCameraCommand(Command.FocusStop),
+            "MidRight": lambda: self.doCameraCommand(Command.FocusStop),
+        })
+
+    def shutterScreen(self):
+        self.labelTopLeft.setText("Home Screen")
+        self.labelMidLeft.setText("Camera Config")
+        self.labelBottomLeft.setText("Settings")
+        self.labelCenterLeft.setText("Recall Preset")
+        self.labelCenterMid.setText("Store Preset")
+        self.labelCenterRight.setText("")
+        self.labelBottomRight.setText("Longer (Down)")
+        self.labelMidRight.setText("Shorter (Up)")
+        self.labelTopRight.setText("Reset Shutter")
+        self.labelCurrentScreen.setText("Shutter Speed")
+
+        self.ButtonControl.connectFunctions({
+            "TopLeft": lambda: self.changeView(self.homeScreen),
+            "MidLeft": lambda: self.changeView(self.cameraConfigScreen),
+            "BottomLeft": lambda: self.changeView(self.networkConfigScreen),
+            "CenterLeft": lambda: self.recallPreset(),
+            "CenterMid": lambda: self.storePreset(),
+            "BottomRight": lambda: self.doCameraCommand(Command.ShutterDown),
+            "MidRight": lambda: self.doCameraCommand(Command.ShutterUp),
+            "TopRight": lambda: self.doCameraCommand(Command.ShutterReset),
+            "Next": lambda: self.nextCamera(),
+            "Prev": lambda: self.nextCamera(-1),
+        })
+
+    def irisScreen(self):
+        self.labelTopLeft.setText("Home Screen")
+        self.labelMidLeft.setText("Camera Config")
+        self.labelBottomLeft.setText("Settings")
+        self.labelCenterLeft.setText("Recall Preset")
+        self.labelCenterMid.setText("Store Preset")
+        self.labelCenterRight.setText("")
+        self.labelBottomRight.setText("Inc F-Stop")
+        self.labelMidRight.setText("Dec F-Stop")
+        self.labelTopRight.setText("Reset F-Stop")
+        self.labelCurrentScreen.setText("Shutter Speed")
+
+        self.ButtonControl.connectFunctions({
+            "TopLeft": lambda: self.changeView(self.homeScreen),
+            "MidLeft": lambda: self.changeView(self.cameraConfigScreen),
+            "BottomLeft": lambda: self.changeView(self.networkConfigScreen),
+            "CenterLeft": lambda: self.recallPreset(),
+            "CenterMid": lambda: self.storePreset(),
+            "BottomRight": lambda: self.doCameraCommand(Command.IrisDown),
+            "MidRight": lambda: self.doCameraCommand(Command.IrisUp),
+            "TopRight": lambda: self.doCameraCommand(Command.IrisReset),
+            "Next": lambda: self.nextCamera(),
+            "Prev": lambda: self.nextCamera(-1),
+        })
+
+    def extraMenu(self):
+        cancelFrame = QFrame()
+        cancelFrame.resize(self.size())
+        cancelFrame.mousePressEvent = lambda e: self.changeView()
+        self.layout().addWidget(cancelFrame)
+        self.tempUI.append(cancelFrame)
+
+        frame = QFrame()
+        frame.setFrameShape(QFrame.Box)
+        frame.setFrameShadow(QFrame.Raised)
+        frame.setLineWidth(5)
+        frame.setAutoFillBackground(True)
+        layout = QVBoxLayout()
+        buttonFrame = QFrame()
+        buttonLayout = QHBoxLayout()
+        buttonFrame.setLayout(buttonLayout)
+        buttonFrame.setFont(QFont("MS Shell Dlg 2", 14))
+        frame.setLayout(layout)
+        title = QLabel("Extra Settings")
+        title.setFont(QFont("MS Shell Dlg 2", 20))
+        title.setAlignment(QtCore.Qt.AlignCenter)
+        layout.addWidget(title)
+        layout.addWidget(buttonFrame)
+
+        def buttonCallback(button):
+            if button == "exposure":
+                self.changeView(self.exposureMenu)
+            elif button == "whitebalance":
+                self.changeView(self.whitebalanceMenu)
+
+        buttonExposure = QPushButton("\nExposure\n\n")
+        buttonExposure.clicked.connect(lambda event: buttonCallback("exposure"))
+        buttonWhiteBalance = QPushButton("\nWhite Balance\n\n")
+        buttonWhiteBalance.clicked.connect(lambda event: buttonCallback("whitebalance"))
+        buttonLayout.addWidget(buttonExposure)
+        buttonLayout.addWidget(buttonWhiteBalance)
+
+        self.layout().addWidget(frame)
+        frame.setFixedSize(300, 200)
+        frame.move(self.width() / 2 - frame.width() / 2, self.height() / 2 - frame.height() / 2)
+        self.tempUI.append(frame)
+
+    def exposureMenu(self):
+        cancelFrame = QFrame()
+        cancelFrame.resize(self.size())
+        cancelFrame.mousePressEvent = lambda e: self.changeView()
+        self.layout().addWidget(cancelFrame)
+        self.tempUI.append(cancelFrame)
+
+        frame = QFrame()
+        frame.setFrameShape(QFrame.Box)
+        frame.setFrameShadow(QFrame.Raised)
+        frame.setLineWidth(5)
+        frame.setAutoFillBackground(True)
+        layout = QVBoxLayout()
+        buttonFrame = QFrame()
+        buttonLayout = QHBoxLayout()
+        buttonFrame.setLayout(buttonLayout)
+        buttonFrame.setFont(QFont("MS Shell Dlg 2", 14))
+        frame.setLayout(layout)
+        title = QLabel("Exposure Mode")
+        title.setFont(QFont("MS Shell Dlg 2", 20))
+        title.setAlignment(QtCore.Qt.AlignCenter)
+        layout.addWidget(title)
+        layout.addWidget(buttonFrame)
+
+        def buttonCallback(button):
+            if button=="auto":
+                self.doCameraCommand(Command.ExposureAuto)
+            elif button=="shutter":
+                self.doCameraCommand(Command.ExposureShutterPriority)
+            elif button=="iris":
+                self.doCameraCommand(Command.ExposureIrisPriority)
+            elif button=="manual":
+                self.doCameraCommand(Command.ExposureManual)
+            self.changeView() # close the popup
+
+        buttonAuto = QPushButton("\nFull Auto\n\n")
+        buttonAuto.clicked.connect(lambda event: buttonCallback("auto"))
+        buttonPriority = QPushButton("\nShutter Priority\n\n")
+        buttonPriority.clicked.connect(lambda event: buttonCallback("shutter"))
+        buttonIris = QPushButton("\nIris Priority\n\n")
+        buttonIris.clicked.connect(lambda event: buttonCallback("iris"))
+        buttonManual = QPushButton("\nManual\n\n")
+        buttonManual.clicked.connect(lambda event: buttonCallback("manual"))
+        buttonLayout.addWidget(buttonAuto)
+        buttonLayout.addWidget(buttonPriority)
+        buttonLayout.addWidget(buttonIris)
+        buttonLayout.addWidget(buttonManual)
+
+        self.layout().addWidget(frame)
+        frame.setFixedSize(500,200)
+        frame.move(self.width()/2-frame.width()/2,self.height()/2-frame.height()/2)
+        self.tempUI.append(frame)
+
+    def whitebalanceMenu(self):
+        cancelFrame = QFrame()
+        cancelFrame.resize(self.size())
+        cancelFrame.mousePressEvent = lambda e: self.changeView()
+        self.layout().addWidget(cancelFrame)
+        self.tempUI.append(cancelFrame)
+
+        frame = QFrame()
+        frame.setFrameShape(QFrame.Box)
+        frame.setFrameShadow(QFrame.Raised)
+        frame.setLineWidth(5)
+        frame.setAutoFillBackground(True)
+        layout = QVBoxLayout()
+        buttonFrame = QFrame()
+        buttonLayout = QHBoxLayout()
+        buttonFrame.setLayout(buttonLayout)
+        buttonFrame.setFont(QFont("MS Shell Dlg 2", 14))
+        frame.setLayout(layout)
+        title = QLabel("White Balance")
+        title.setFont(QFont("MS Shell Dlg 2", 20))
+        title.setAlignment(QtCore.Qt.AlignCenter)
+        layout.addWidget(title)
+        layout.addWidget(buttonFrame)
+
+        def buttonCallback(button):
+            if button == "auto":
+                self.doCameraCommand(Command.WBAuto)
+            elif button == "autotrack":
+                self.doCameraCommand(Command.WBATW)
+            elif button == "indoor":
+                self.doCameraCommand(Command.WBIndoor)
+            elif button == "outdoor":
+                self.doCameraCommand(Command.WBOutdoor)
+            elif button == "onepush":
+                self.doCameraCommand(Command.WBOnePush)
+            elif button == "manual":
+                self.doCameraCommand(Command.WBManual)
+            self.changeView()  # close the popup
+
+        buttonAuto = QPushButton("\nAuto WB\n\n")
+        buttonAuto.clicked.connect(lambda event: buttonCallback("auto"))
+        buttonAutoTrack = QPushButton("\nAuto Tracking\n\n")
+        buttonAutoTrack.clicked.connect(lambda event: buttonCallback("autotrack"))
+        buttonIndoor = QPushButton("\nIndoor\n\n")
+        buttonIndoor.clicked.connect(lambda event: buttonCallback("indoor"))
+        buttonOutdoor = QPushButton("\nOutdoor\n\n")
+        buttonOutdoor.clicked.connect(lambda event: buttonCallback("outdoor"))
+        buttonOnePush = QPushButton("\nOne Push\n\n")
+        buttonOnePush.clicked.connect(lambda event: buttonCallback("onepush"))
+        buttonManual = QPushButton("\nManual\n\n")
+        buttonManual.clicked.connect(lambda event: buttonCallback("manual"))
+        buttonLayout.addWidget(buttonAuto)
+        buttonLayout.addWidget(buttonAutoTrack)
+        buttonLayout.addWidget(buttonIndoor)
+        buttonLayout.addWidget(buttonOutdoor)
+        buttonLayout.addWidget(buttonOnePush)
+        buttonLayout.addWidget(buttonManual)
+
+        self.layout().addWidget(frame)
+        frame.setFixedSize(600, 200)
+        frame.move(self.width() / 2 - frame.width() / 2, self.height() / 2 - frame.height() / 2)
+        self.tempUI.append(frame)
 
     def shutdownScreen(self):
         self.labelTopLeft.setText("Discover Cameras")
@@ -679,9 +904,9 @@ class MainScreen(QMainWindow):
             self.close()
 
         self.ButtonControl.connectFunctions({
-            "TopLeft": lambda: self.discoverCameras(),
-            "MidLeft": lambda: self.homeScreen(),
-            "BottomLeft": lambda: self.networkConfigScreen(),
+            "TopLeft": lambda: self.changeView(self.homeScreen),
+            "MidLeft": lambda: self.changeView(self.cameraConfigScreen),
+            "BottomLeft": lambda: self.changeView(self.networkConfigScreen),
             "CenterLeft": lambda: self.recallPreset(),
             "CenterMid": lambda: self.storePreset(),
             "Next": lambda: self.nextCamera(),
