@@ -172,31 +172,31 @@ class ButtonControl(QObject):
 
     def decodeButton(self, num, press=True): # press=False is a release event
         buttonMap = [
-            self.Button1, # 0,0
-            self.Button2,
-            self.Button3,
+            1, # 0,0
+            2,
+            3,
             None,
-            self.Button9,
-            self.Button4,
-            self.Button5,
-            self.Button6, # 0,7
-            self.Button0, # 1,0
-            self.ButtonEnter,
-            self.Button7,
-            self.Button8,
-            self.ButtonBottomLeft,
-            self.ButtonMidLeft,
-            self.ButtonTopLeft,
-            self.ButtonCenterLeft, # 1,7
-            self.ButtonCenterMid, # 2,0
-            self.ButtonCenterRight,
-            self.ButtonPrev,
-            self.ButtonNext,
-            self.ButtonTopRight,
-            self.ButtonMidRight,
-            self.ButtonBottomRight,
-            self.ButtonClear
+            9,
+            4,
+            5,
+            6, # 0,7
+            0, # 1,0
+            10,
+            7,
+            8,
+            "BottomLeft",
+            "MidLeft",
+            "TopLeft",
+            "CenterLeft", # 1,7
+            "CenterMid", # 2,0
+            "CenterRight",
+            "Prev",
+            "Next",
+            "TopRight",
+            "MidRight",
+            "BottomRight",
+            -1
         ]
-        buttonMap[num](release=not press)
+        self.buttonEvent(buttonMap[num],release=not press)
     def decodeButtonRelease(self, num):
         self.decodeButton(num,press=False)
