@@ -17,7 +17,7 @@ import database
 from ButtonControl import ButtonControl
 from CameraPinger import CameraPinger
 from sony_visca.visca_ip_camera import ViscaIPCamera
-from sony_visca.visca_commands import Command
+from sony_visca.visca_commands import Command, Inquiry
 from SerialControl import SerialControl
 
 
@@ -39,6 +39,20 @@ def padIPAddress(ip):
     nOctets = [int(x) for x in octets]
     return "{:03d}.{:03d}.{:03d}.{:03d}".format(nOctets[0],nOctets[1],nOctets[2],nOctets[3])
 
+
+def highlightButton(b, buttons):
+    for i in range(len(buttons)):
+        buttons[i].setProperty("active", bool(i == b))
+        buttons[i].style().unpolish(buttons[i])  # force stylesheet update?
+        buttons[i].style().polish(buttons[i])
+
+def styleButtons(buttons):
+    for i in range(len(buttons)):
+        buttons[i].setStyleSheet("""
+                QPushButton[active="true"] {background-color: DarkGreen};
+                QPushButton[active="false"] {background-color: Grey};
+                """)
+        buttons[i].setFont(QFont("MS Shell Dlg 2", 14))
 
 class MainScreen(QMainWindow):
     uiUpdateTrigger = pyqtSignal(list) # for arbitrary UI updates from other threads (filthy!)
@@ -256,6 +270,7 @@ class MainScreen(QMainWindow):
                 if cam.ip not in known_ips:
                     try:
                         cam.initialise()
+                        self.updateCameraProperties(camera=cam)
                     except socket.timeout:
                         # probably camera is on a different network
                         log.warning("Failed to initialise camera %s",str(cam))
@@ -335,34 +350,37 @@ class MainScreen(QMainWindow):
                 self.doCameraCommand(Command(Command.MemoryRecall(num)))
         self.ButtonControl.input("","Recall Preset:",confirm)
 
-    def toggleParameter(self, parameter, qwidget, textTrue, textFalse, commandTrue=None, commandFalse=None, toggle=True, default=True):
+    def updateCameraProperties(self, camera=None, full=True):
+        if camera is None:
+            if self.selectedCamera is None:
+                return
+            camera = self.selectedCamera
+        camera.properties.decodeBlockLens(camera.inquire(Command(Inquiry.BlockLens)))
+        if full:
+            camera.properties.decodeBlockControl(camera.inquire(Command(Inquiry.BlockControl)))
+            camera.properties.decodeBlockOther(camera.inquire(Command(Inquiry.BlockOther)))
+            camera.properties.decodeBlockEnlargement1(camera.inquire(Command(Inquiry.BlockEnlargement)))
+
+    def toggleCameraProperty(self, parameter, qwidget, textTrue, textFalse, commandTrue=None, commandFalse=None, toggle=True, default=True):
         # toggles a parameter on a camera and/or checks what state the paramters is in and udpdates relevent bits
         if self.selectedCamera is None:
             return default
 
         def checkParameter(parameter):
-            #TODO: replace this with an inquiry against the camera?
-            try:
-                if parameter in self.selectedCamera.parameters:
-                    if self.selectedCamera.parameters[parameter]:
-                        return True
-                    else:
-                        return False
-            except AttributeError:
-                self.selectedCamera.parameters = {}
-            return default #default normally is True
+            d = self.selectedCamera.properties.__dict__
+            if parameter in d:
+                return d[parameter]
+            else:
+                return default
 
         currentState = checkParameter(parameter)
         if toggle:
             if commandTrue is None or commandFalse is None:
                 raise SyntaxError("Command missing from toggle parameter call!")
             currentState = not currentState
-            if currentState:
-                self.doCameraCommand(commandTrue)
-                self.selectedCamera.parameters[parameter] = True
-            else:
-                self.doCameraCommand(commandFalse)
-                self.selectedCamera.parameters[parameter] = False
+
+            self.doCameraCommand(commandTrue if currentState else commandFalse)
+            self.selectedCamera.properties.__dict__[parameter] = currentState
 
         # update UI elements
         if currentState:
@@ -656,7 +674,7 @@ class MainScreen(QMainWindow):
         self.labelMidRight.setText("Focus Near")
         self.labelCurrentScreen.setText("Focus Menu")
 
-        self.toggleParameter("autofocus",self.labelTopRight,"Auto Focus", "Manual Focus",toggle=False)
+        self.toggleCameraProperty("autoFocus", self.labelTopRight, "Auto Focus", "Manual Focus", toggle=False)
 
         self.ButtonControl.connectFunctions({
             "TopLeft": lambda: self.changeView(self.homeScreen),
@@ -667,7 +685,7 @@ class MainScreen(QMainWindow):
             "CenterRight": lambda: self.doCameraCommand(Command.FocusOnePush),
             "BottomRight": lambda: self.doCameraCommand(Command.FocusFar),
             "MidRight": lambda: self.doCameraCommand(Command.FocusNear),
-            "TopRight": lambda: self.toggleParameter("autofocus",self.labelTopRight,"Auto Focus", "Manual Focus",Command.AutoFocus, Command.ManualFocus),
+            "TopRight": lambda: self.toggleCameraProperty("autoFocus", self.labelTopRight, "Auto Focus", "Manual Focus", Command.AutoFocus, Command.ManualFocus),
             "Next": lambda: self.nextCamera(),
             "Prev": lambda: self.nextCamera(-1),
         },{
@@ -762,7 +780,7 @@ class MainScreen(QMainWindow):
 
         self.labelCurrentScreen.setText("Exposure Compensation")
 
-        self.toggleParameter("exposurecomp",self.labelTopRight,"ExpComp On", "ExpComp Off",toggle=False)
+        self.toggleCameraProperty("exposureCompOn", self.labelTopRight, "ExpComp On", "ExpComp Off", toggle=False)
 
         self.ButtonControl.connectFunctions({
             "TopLeft": lambda: self.changeView(self.homeScreen),
@@ -773,7 +791,7 @@ class MainScreen(QMainWindow):
             "CenterRight": lambda: self.doCameraCommand(Command.ExposureCompReset),
             "BottomRight": lambda: self.doCameraCommand(Command.ExposureCompDown),
             "MidRight": lambda: self.doCameraCommand(Command.ExposureCompUp),
-            "TopRight": lambda: self.toggleParameter("exposurecomp",self.labelTopRight,"ExpComp On", "ExpComp Off",Command.ExposureCompOn,Command.ExposureCompOff),
+            "TopRight": lambda: self.toggleCameraProperty("exposureCompOn", self.labelTopRight, "ExpComp On", "ExpComp Off", Command.ExposureCompOn, Command.ExposureCompOff),
             "Next": lambda: self.nextCamera(),
             "Prev": lambda: self.nextCamera(-1),
         })
@@ -827,6 +845,8 @@ class MainScreen(QMainWindow):
         layout.addWidget(title)
         layout.addWidget(buttonFrame)
 
+        self.updateCameraProperties()
+
         buttonExposure = QPushButton("\nExposure\n\n")
         buttonExposure.clicked.connect(lambda event: buttonCallback("exposure"))
         buttonWhiteBalance = QPushButton("\nWhite\nBalance\n")
@@ -872,24 +892,24 @@ class MainScreen(QMainWindow):
             elif button == "gain":
                 self.changeView(self.gainScreen)
             elif button == "backlight":
-                self.toggleParameter("backlightcomp",buttonBacklight,"\nBacklight\nComp On\n", "\nBacklight\nComp Off\n",Command.BacklightCompOn,Command.BacklightCompOff)
+                self.toggleCameraProperty("backlightComp", buttonBacklight, "\nBacklight\nComp On\n", "\nBacklight\nComp Off\n", Command.BacklightCompOn, Command.BacklightCompOff)
             elif button == "dynamicrange":
                 self.changeView(self.dynamicRangeMenu)
             elif button == "aperture":
                 self.changeView(self.apertureScreen)
             elif button == "highres":
-                self.toggleParameter("highres",buttonHighRes,"\nHigh Resolution\nOn\n","\nHigh Resolution\nOff\n",Command.HighResolutionOn,Command.HighResolutionOff)
+                self.toggleCameraProperty("highResolution", buttonHighRes, "\nHigh Resolution\nOn\n", "\nHigh Resolution\nOff\n", Command.HighResolutionOn, Command.HighResolutionOff)
             elif button == "noisereduction":
                 self.changeView(self.noiseReductionMenu)
             elif button == "highsensitivity":
-                self.toggleParameter("highsens",buttonHighSensitivity,"\nHigh Sensitivity\nOn\n","\nHigh Sensitivity\nOff\n",Command.HighSensitivityOn,Command.HighSensitivityOff)
+                self.toggleCameraProperty("highSensitivity", buttonHighSensitivity, "\nHigh Sensitivity\nOn\n", "\nHigh Sensitivity\nOff\n", Command.HighSensitivityOn, Command.HighSensitivityOff)
             elif button == "infodisp":
-                self.toggleParameter("infodisp",buttonInfoDisplay,"\nInfo Display\nOn\n","\nInfo Display\nOff\n",Command.InfoDisplayOn,Command.InfoDisplayOff,default=False)
+                self.toggleCameraProperty("infoDisplay", buttonInfoDisplay, "\nInfo Display\nOn\n", "\nInfo Display\nOff\n", Command.InfoDisplayOn, Command.InfoDisplayOff, default=False)
 
-        self.toggleParameter("backlightcomp",buttonBacklight,"\nBacklight\nComp On\n", "\nBacklight\nComp Off\n",toggle=False)
-        self.toggleParameter("highres", buttonHighRes, "\nHigh Resolution\nOn\n", "\nHigh Resolution\nOff\n", toggle=False)
-        self.toggleParameter("highsens", buttonHighSensitivity, "\nHigh Sensitivity\nOn\n", "\nHigh Sensitivity\nOff\n", toggle=False)
-        self.toggleParameter("infodisp", buttonInfoDisplay, "\nInfo Display\nOn\n", "\nInfo Display\nOff\n", toggle=False, default=False)
+        self.toggleCameraProperty("backlightComp", buttonBacklight, "\nBacklight\nComp On\n", "\nBacklight\nComp Off\n", toggle=False)
+        self.toggleCameraProperty("highResolution", buttonHighRes, "\nHigh Resolution\nOn\n", "\nHigh Resolution\nOff\n", toggle=False)
+        self.toggleCameraProperty("highSensitivity", buttonHighSensitivity, "\nHigh Sensitivity\nOn\n", "\nHigh Sensitivity\nOff\n", toggle=False)
+        self.toggleCameraProperty("infoDisplay", buttonInfoDisplay, "\nInfo Display\nOn\n", "\nInfo Display\nOff\n", toggle=False, default=False)
 
         self.layout().addWidget(frame)
         frame.setFixedSize(700, 400)
@@ -986,7 +1006,10 @@ class MainScreen(QMainWindow):
                 self.doCameraCommand(Command.WBOnePush)
             elif button == "manual":
                 self.doCameraCommand(Command.WBManual)
-            self.changeView()  # close the popup
+
+            self.updateCameraProperties()
+            highlightButton(self.selectedCamera.properties.whiteBalanceMode, buttons)
+            # self.changeView()  # close the popup
 
         buttonAuto = QPushButton("\nAuto WB\n\n")
         buttonAuto.clicked.connect(lambda event: buttonCallback("auto"))
@@ -1006,6 +1029,10 @@ class MainScreen(QMainWindow):
         buttonLayout.addWidget(buttonOutdoor)
         buttonLayout.addWidget(buttonOnePush)
         buttonLayout.addWidget(buttonManual)
+
+        buttons = [buttonAuto, buttonIndoor, buttonOutdoor, buttonOnePush, buttonAutoTrack, buttonManual]
+        styleButtons(buttons)
+        highlightButton(self.selectedCamera.properties.whiteBalanceMode, buttons)
 
         self.layout().addWidget(frame)
         frame.setFixedSize(600, 200)
@@ -1045,7 +1072,7 @@ class MainScreen(QMainWindow):
                 self.doCameraCommand(Command.WideDynamicRangeMed)
             elif button == "high":
                 self.doCameraCommand(Command.WideDynamicRangeHigh)
-            self.changeView()  # close the popup
+            # self.changeView()  # close the popup
 
         buttonOff = QPushButton("\nOff\n\n")
         buttonOff.clicked.connect(lambda event: buttonCallback("off"))
@@ -1059,6 +1086,10 @@ class MainScreen(QMainWindow):
         buttonLayout.addWidget(buttonLow)
         buttonLayout.addWidget(buttonMedium)
         buttonLayout.addWidget(buttonHigh)
+
+        buttons = [buttonOff, buttonLow, buttonMedium, buttonHigh]
+        styleButtons(buttons)
+        # can't highlight button until add more inquiries
 
         self.layout().addWidget(frame)
         frame.setFixedSize(600, 200)
@@ -1081,7 +1112,6 @@ class MainScreen(QMainWindow):
         buttonFrame = QFrame()
         buttonLayout = QHBoxLayout()
         buttonFrame.setLayout(buttonLayout)
-        buttonFrame.setFont(QFont("MS Shell Dlg 2", 14))
         frame.setLayout(layout)
         title = QLabel("Noise Reduction Level")
         title.setFont(QFont("MS Shell Dlg 2", 20))
@@ -1102,7 +1132,9 @@ class MainScreen(QMainWindow):
                 self.doCameraCommand(Command.NoiseReduction(4))
             elif button == "5":
                 self.doCameraCommand(Command.NoiseReduction(5))
-            self.changeView()  # close the popup
+            self.updateCameraProperties()
+            highlightButton(self.selectedCamera.properties.noiseReduction, buttons)
+            # self.changeView()  # close the popup
 
         buttonOff = QPushButton("\nOff\n\n")
         buttonOff.clicked.connect(lambda event: buttonCallback("off"))
@@ -1122,6 +1154,10 @@ class MainScreen(QMainWindow):
         buttonLayout.addWidget(button3)
         buttonLayout.addWidget(button4)
         buttonLayout.addWidget(button5)
+
+        buttons = [buttonOff,button1,button2,button3,button4,button5]
+        styleButtons(buttons)
+        highlightButton(self.selectedCamera.properties.noiseReduction, buttons)
 
         self.layout().addWidget(frame)
         frame.setFixedSize(500, 200)

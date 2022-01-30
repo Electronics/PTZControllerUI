@@ -5,6 +5,8 @@ import threading
 import struct
 import re
 import ipaddress
+
+from InquiryDecode import CameraProperties
 from sony_visca import aioudp
 from sony_visca.visca_commands import Inquiry, Command
 from sony_visca.myqueue import MyQueue
@@ -55,6 +57,8 @@ class ViscaIPCamera:
 		self.simple_visca = simple_visca
 		self._remote_sock = None
 		self._queue_loop = None  # Handle to the Task running the queue processing loop
+
+		self.properties = CameraProperties()
 
 	def __str__(self):
 		return f"{self.name}({self.mac}) {self.ip}"
