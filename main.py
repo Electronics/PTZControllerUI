@@ -208,13 +208,12 @@ class MainScreen(QMainWindow):
         return extras
 
     def discoverCameras(self):
-        #todo close socket connections (and stop any cameras moving)
-        #todo move this crap to a thread
         self.infoPopup.setText("Searching...")
         self.infoPopup.show()
         updateUI()
         log.info("Searching for cameras")
         found = ViscaIPCamera.discoverCameras()
+        found += ViscaIPCamera.discoverNonSony()
         log.info("Found %d cameras", len(found))
         updateUI()
         self.popup("Found "+str(len(found))+" cameras")
@@ -338,11 +337,14 @@ class MainScreen(QMainWindow):
 
     def toggleParameter(self, parameter, qwidget, textTrue, textFalse, commandTrue=None, commandFalse=None, toggle=True, default=True):
         # toggles a parameter on a camera and/or checks what state the paramters is in and udpdates relevent bits
+        if self.selectedCamera is None:
+            return default
+
         def checkParameter(parameter):
             #TODO: replace this with an inquiry against the camera?
             try:
                 if parameter in self.selectedCamera.parameters:
-                    if parameter:
+                    if self.selectedCamera.parameters[parameter]:
                         return True
                     else:
                         return False
