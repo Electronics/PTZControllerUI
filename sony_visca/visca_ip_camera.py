@@ -14,6 +14,7 @@ from sony_visca.myqueue import MyQueue
 socket.setdefaulttimeout(2)
 
 LOGGER = logging.getLogger("ptz.visca")
+LOGGER.setLevel(logging.DEBUG)
 
 
 class LoopThread(threading.Thread):

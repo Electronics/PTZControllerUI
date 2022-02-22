@@ -1,5 +1,6 @@
 import os
 import socket
+import sqlite3
 import subprocess
 import sys
 import re
@@ -21,7 +22,7 @@ from sony_visca.visca_commands import Command, Inquiry
 from SerialControl import SerialControl
 
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger("PiControl")
 log.setLevel(logging.DEBUG)
 
@@ -355,7 +356,7 @@ class MainScreen(QMainWindow):
             if self.selectedCamera is None:
                 return
             camera = self.selectedCamera
-        camera.properties.decodeBlockLens(camera.inquire(Command(Inquiry.BlockLens)))
+        camera.properties.decodeBlockLens(camera.inquire(Command(Inquiry.BlockLens))) # TODO: seperate out the camera inquire and check if it actualy responded
         if full:
             camera.properties.decodeBlockControl(camera.inquire(Command(Inquiry.BlockControl)))
             camera.properties.decodeBlockOther(camera.inquire(Command(Inquiry.BlockOther)))
@@ -622,11 +623,14 @@ class MainScreen(QMainWindow):
                             camItem.setData(QtCore.Qt.UserRole, cam)
                             self.cameraListWidget.addItem(camItem)
                             log.debug("Adding new camera[%s,%s,%s] to database", newName, newip_,mac)
-                            database.query(
-                                "INSERT INTO cameras (name, ip, type, mac, autocreated) VALUES (?, ?, ?, ?, 0)",
-                                (newName, newip_, "chinese", mac),
-                            )
-                            database.commit()
+                            try:
+                                database.query(
+                                    "INSERT INTO cameras (name, ip, type, mac, autocreated) VALUES (?, ?, ?, ?, 0)",
+                                    (newName, newip_, "chinese" if "#" in newName else "sony", mac),
+                                )
+                                database.commit()
+                            except sqlite3.IntegrityError:
+                                log.warning("Cannot add manual camera to database due to already-existing entry")
 
                     except socket.error:
                         self.popup("Invalid IP Address!")

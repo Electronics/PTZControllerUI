@@ -59,6 +59,10 @@ class CameraProperties:
         self.dropFrame = True
 
     def decodeBlockLens(self, response):
+        if response is None:
+            log.warning("Block Lens Inquiry responded with None")
+            return
+
         if len(response)<15:
             log.warning("Block Lens Inquiry repsonse was too short")
             return
@@ -80,6 +84,9 @@ class CameraProperties:
         self.zoomCommand = bool(response[14]&0x01)
 
     def decodeBlockControl(self,response):
+        if response is None:
+            log.warning("Block Control Inquiry responded with None")
+            return
         if len(response)<14:
             log.warning("Block Control Inquiry repsonse was too short")
             return
@@ -104,6 +111,9 @@ class CameraProperties:
         self.exposureComp = response[13] & 0x0f
 
     def decodeBlockOther(self, response):
+        if response is None:
+            log.warning("Block Other Inquiry responded with None")
+            return
         if len(response)<13:
             log.warning("Block Other Inquiry repsonse was too short")
             return
@@ -118,6 +128,9 @@ class CameraProperties:
         self.dropFrame = bool(response[12]&0x01)
 
     def decodeBlockEnlargement1(self, response):
+        if response is None:
+            log.warning("Block Enlargment1 Inquiry responded with None")
+            return
         if len(response)<15:
             log.warning("Block Enlargment1 Inquiry repsonse was too short")
             return
@@ -137,6 +150,9 @@ class CameraProperties:
         self.chromaSuppress = (response[14]&0x70)>>4
 
     def decodeBlockEnlargement2(self, response):
+        if response is None:
+            log.warning("Block Enlargement2 Inquiry responded with None")
+            return
         if len(response)<8:
             log.warning("Block Enlargement2 Inquiry repsonse was too short")
             return
@@ -148,6 +164,9 @@ class CameraProperties:
         self.defog = bool(response[7]&0x01)
 
     def decodeBlockEnlargement3(self, response):
+        if response is None:
+            log.warning("Block Enlargement3 Inquiry responded with None")
+            return
         if len(response)<3:
             log.warning("Block Enlargement3 Inquiry repsonse was too short")
             return
