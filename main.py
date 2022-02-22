@@ -367,11 +367,15 @@ class MainScreen(QMainWindow):
             return default
 
         def checkParameter(parameter):
-            d = self.selectedCamera.properties.__dict__
-            if parameter in d:
-                return d[parameter]
-            else:
-                return default
+            try:
+                d = self.selectedCamera.properties.__dict__
+                if parameter in d:
+                    return d[parameter]
+                else:
+                    return default
+            except AttributeError:
+                self.selectedCamera.parameters = {}
+            return default
 
         currentState = checkParameter(parameter)
         if toggle:
@@ -612,7 +616,8 @@ class MainScreen(QMainWindow):
                         else:
                             # todo determine the type of camera
                             log.debug("Adding new camera: %s[%s,%s]", newName, newip_,mac)
-                            cam = ViscaIPCamera(newName, newip_, mac)
+                            cam = ViscaIPCamera(newName, newip_, mac, simple_visca=True if "#" in newName else False)
+                            cam.initialise()
                             camItem = QListWidgetItem(str(cam))
                             camItem.setData(QtCore.Qt.UserRole, cam)
                             self.cameraListWidget.addItem(camItem)
@@ -621,6 +626,7 @@ class MainScreen(QMainWindow):
                                 "INSERT INTO cameras (name, ip, type, mac, autocreated) VALUES (?, ?, ?, ?, 0)",
                                 (newName, newip_, "chinese", mac),
                             )
+                            database.commit()
 
                     except socket.error:
                         self.popup("Invalid IP Address!")
@@ -628,7 +634,7 @@ class MainScreen(QMainWindow):
 
                 self.ButtonControl.input("", "Camera IP", setIP)
 
-            self.ButtonControl.input("", "Camera Name", setName)
+            self.ButtonControl.input("", "Camera Name (# for simpleVisca)", setName)
 
         isCalibrating = False
         def calibrateJoystick():
