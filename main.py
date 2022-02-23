@@ -5,6 +5,7 @@ import subprocess
 import sys
 import re
 import logging
+import time
 
 from getmac import get_mac_address
 
@@ -18,7 +19,7 @@ import database
 from ButtonControl import ButtonControl
 from CameraPinger import CameraPinger
 from sony_visca.visca_ip_camera import ViscaIPCamera
-from sony_visca.visca_commands import Command, Inquiry
+from sony_visca.visca_commands import Command, Inquiry, Lookups
 from SerialControl import SerialControl
 
 
@@ -43,17 +44,19 @@ def padIPAddress(ip):
 
 def highlightButton(b, buttons):
     for i in range(len(buttons)):
-        buttons[i].setProperty("active", bool(i == b))
-        buttons[i].style().unpolish(buttons[i])  # force stylesheet update?
-        buttons[i].style().polish(buttons[i])
+        if buttons[i] is not None:
+            buttons[i].setProperty("active", bool(i == b))
+            buttons[i].style().unpolish(buttons[i])  # force stylesheet update?
+            buttons[i].style().polish(buttons[i])
 
 def styleButtons(buttons):
     for i in range(len(buttons)):
-        buttons[i].setStyleSheet("""
-                QPushButton[active="true"] {background-color: DarkGreen};
-                QPushButton[active="false"] {background-color: Grey};
-                """)
-        buttons[i].setFont(QFont("MS Shell Dlg 2", 14))
+        if buttons[i] is not None:
+            buttons[i].setStyleSheet("""
+                    QPushButton[active="true"] {background-color: DarkGreen};
+                    QPushButton[active="false"] {background-color: Grey};
+                    """)
+            buttons[i].setFont(QFont("MS Shell Dlg 2", 14))
 
 class MainScreen(QMainWindow):
     uiUpdateTrigger = pyqtSignal(list) # for arbitrary UI updates from other threads (filthy!)
@@ -85,6 +88,8 @@ class MainScreen(QMainWindow):
             "8": lambda: presetRecallShortcut(8),
             "9": lambda: presetRecallShortcut(9)
         })
+
+        self.buttonRefresh.mouseReleaseEvent = lambda event: self.updateCameraProperties(full=True)
 
         self.setWindowTitle("PTZ Controller")
         camPosScene = QGraphicsScene(self)
@@ -351,16 +356,46 @@ class MainScreen(QMainWindow):
                 self.doCameraCommand(Command(Command.MemoryRecall(num)))
         self.ButtonControl.input("","Recall Preset:",confirm)
 
-    def updateCameraProperties(self, camera=None, full=True):
+    def updatePropertiesUI(self):
+        def checkParameter(parameter):
+            if self.selectedCamera is None:
+                return None # this shouldn't occur but does...
+            try:
+                d = self.selectedCamera.properties.__dict__
+                if parameter in d:
+                    return d[parameter]
+                else:
+                    return None
+            except AttributeError:
+                self.selectedCamera.parameters = {}
+            return None
+        if checkParameter("iris") is not None:
+            self.labelIris.setText(Lookups.Iris[self.selectedCamera.properties.iris])
+        if checkParameter("gain") is not None:
+            self.labelGain.setText(str(self.selectedCamera.properties.gain*3)+" dB")
+        if checkParameter("shutter") is not None:
+            self.labelShutter.setText(Lookups.Shutter[self.selectedCamera.properties.shutter])
+        if checkParameter("zoom") is not None:
+            self.sliderZoom.setValue(self.selectedCamera.properties.zoom)
+        if checkParameter("focus") is not None:
+            self.sliderFocus.setValue(self.selectedCamera.properties.focus)
+        if checkParameter("exposureComp") is not None:
+            self.labelExpComp.setText(str(self.selectedCamera.properties.exposureComp*1.5-10.5)+" dB")
+
+    def updateCameraProperties(self, camera=None, full=True, type=""):
         if camera is None:
             if self.selectedCamera is None:
                 return
             camera = self.selectedCamera
-        camera.properties.decodeBlockLens(camera.inquire(Command(Inquiry.BlockLens))) # TODO: seperate out the camera inquire and check if it actualy responded
-        if full:
+        if type=="block" or full:
             camera.properties.decodeBlockControl(camera.inquire(Command(Inquiry.BlockControl)))
+        if type=="blockOther" or full:
             camera.properties.decodeBlockOther(camera.inquire(Command(Inquiry.BlockOther)))
+        if type=="blockEnlargement" or full:
             camera.properties.decodeBlockEnlargement1(camera.inquire(Command(Inquiry.BlockEnlargement)))
+        if type=="" or full:
+            camera.properties.decodeBlockLens(camera.inquire(Command(Inquiry.BlockLens)))  # TODO: seperate out the camera inquire and check if it actualy responded
+        self.updatePropertiesUI()
 
     def toggleCameraProperty(self, parameter, qwidget, textTrue, textFalse, commandTrue=None, commandFalse=None, toggle=True, default=True):
         # toggles a parameter on a camera and/or checks what state the paramters is in and udpdates relevent bits
@@ -866,6 +901,7 @@ class MainScreen(QMainWindow):
         buttonGain = QPushButton("\nGain\n\n")
         buttonGain.clicked.connect(lambda event: buttonCallback("gain"))
         buttonBacklight = QPushButton("\nBacklight\nComp On\n")
+        self.toggleCameraProperty("backlightComp", buttonBacklight, "\nBacklight\nComp On\n", "\nBacklight\nComp Off\n", toggle=False)
         buttonBacklight.clicked.connect(lambda event: buttonCallback("backlight"))
         buttonDynamicRange = QPushButton("\nWide Dynamic\n\n")
         buttonDynamicRange.clicked.connect(lambda event: buttonCallback("dynamicrange"))
@@ -876,6 +912,7 @@ class MainScreen(QMainWindow):
         buttonNoiseReduction = QPushButton("\nNoise Reduction\n\n")
         buttonNoiseReduction.clicked.connect(lambda event: buttonCallback("noisereduction"))
         buttonHighSensitivity = QPushButton("\nHigh Sensitivity\nOn\n")
+        self.toggleCameraProperty("highSensitivity", buttonHighSensitivity, "\nHigh Sensitivity\nOn\n", "\nHigh Sensitivity\nOff\n", toggle=False)
         buttonHighSensitivity.clicked.connect(lambda event: buttonCallback("highsensitivity"))
         buttonInfoDisplay = QPushButton("\nInfo Display\nOff\n")
         buttonInfoDisplay.clicked.connect(lambda event: buttonCallback("infodisp"))
@@ -959,7 +996,11 @@ class MainScreen(QMainWindow):
                 self.doCameraCommand(Command.ExposureIrisPriority)
             elif button=="manual":
                 self.doCameraCommand(Command.ExposureManual)
-            self.changeView() # close the popup
+
+            time.sleep(0.05) # urghh
+            self.updateCameraProperties(type="block", full=False)
+            highlightButton(self.selectedCamera.properties.exposureMode, buttons)
+            # self.changeView() # close the popup
 
         buttonAuto = QPushButton("\nFull Auto\n\n")
         buttonAuto.clicked.connect(lambda event: buttonCallback("auto"))
@@ -973,6 +1014,11 @@ class MainScreen(QMainWindow):
         buttonLayout.addWidget(buttonPriority)
         buttonLayout.addWidget(buttonIris)
         buttonLayout.addWidget(buttonManual)
+
+        buttons = [buttonAuto,None,None,buttonManual,None,None,None,None,None,None,buttonPriority,buttonIris]
+        # weird things because the mode is also weird, also datasheet is wrong
+        styleButtons(buttons)
+        highlightButton(self.selectedCamera.properties.exposureMode, buttons)
 
         self.layout().addWidget(frame)
         frame.setFixedSize(500,200)
@@ -1067,7 +1113,7 @@ class MainScreen(QMainWindow):
         buttonFrame.setLayout(buttonLayout)
         buttonFrame.setFont(QFont("MS Shell Dlg 2", 14))
         frame.setLayout(layout)
-        title = QLabel("Wide Dynamic Range")
+        title = QLabel("Wide Dynamic Range [No FBQ :(]")
         title.setFont(QFont("MS Shell Dlg 2", 20))
         title.setAlignment(QtCore.Qt.AlignCenter)
         layout.addWidget(title)
