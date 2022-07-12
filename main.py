@@ -222,9 +222,9 @@ class MainScreen(QMainWindow):
         extras = []
         for row in rows:
             if row["type"] == "sony":
-                extras.append(ViscaIPCamera(row["name"], row["ip"], None))
+                extras.append(ViscaIPCamera(row["name"], row["ip"], row["mac"])) # TODO: update mac?
             else:
-                extras.append(ViscaIPCamera(row["name"], row["ip"], None, port=1259, simple_visca=True))
+                extras.append(ViscaIPCamera(row["name"], row["ip"], row["mac"], port=1259, simple_visca=True))
         log.info("Found %d extra cameras (from db)", len(extras))
         return extras
 
@@ -271,6 +271,7 @@ class MainScreen(QMainWindow):
         #TODO: clear out old cameras that are properly gone
         #self.cameras.clear()  # do NOT re-initialise as we've passed a reference to other bits
         notFound = list(self.cameras.keys()) # we'll remove cameras as we find them, anything left we need to remove
+        stuckCameras = [i.text() for i in self.cameraListWidget.findItems('.*', QtCore.Qt.MatchRegExp)] # bodge to remove stuck cameras in list widget
 
         if found:
             for cam in found:
@@ -294,6 +295,8 @@ class MainScreen(QMainWindow):
                     self.cameras.pop(oldName)
                     if oldName in notFound: # in case there's a duplicate ip or something
                         notFound.remove(oldName)
+                    if oldName in stuckCameras:
+                        stuckCameras.remove(oldName)
 
                     self.cameras[str(cam)] = cam
                     items = self.cameraListWidget.findItems(oldName, QtCore.Qt.MatchExactly)
@@ -311,6 +314,13 @@ class MainScreen(QMainWindow):
             self.cameraListWidget.takeItem(index)
             log.info("Removed missing camera %s",item.data(QtCore.Qt.UserRole))
             del item
+        for cam in stuckCameras:
+            items = self.cameraListWidget.findItems(cam, QtCore.Qt.MatchExactly)
+            if len(items)>0:
+                index = self.cameraListWidget.row(items[0])
+                if index>=0:
+                    self.cameraListWidget.takeItem(index)
+                    log.info("Removed stuck camera %s",camName.text())
 
 
     def changeSelectedCamera(self):
@@ -319,10 +329,14 @@ class MainScreen(QMainWindow):
             self.selectedCamera.queueCommands(Command(Command.PanTiltStop()), Command(Command.ZoomStop), Command(Command.FocusStop), override=True)
 
         try:
-            self.selectedCamera = self.cameraListWidget.currentItem().data(QtCore.Qt.UserRole)
-            self.selectedCameraName = self.selectedCamera.name
-            log.info("Selected camera changed to %s", self.selectedCameraName)
-            self.labelInfo.setText(self.selectedCameraName)
+            currentItem = self.cameraListWidget.currentItem()
+            if currentItem is not None:
+                self.selectedCamera = currentItem.data(QtCore.Qt.UserRole)
+                self.selectedCameraName = self.selectedCamera.name
+                log.info("Selected camera changed to %s", self.selectedCameraName)
+                self.labelInfo.setText(self.selectedCameraName)
+            else:
+                log.info("Attempted to change camera to selection which is None")
         except KeyError:
             log.warning("Tried to switch camera to a non-existent camera; has it been deleted?")
 
@@ -668,6 +682,7 @@ class MainScreen(QMainWindow):
                             camItem = QListWidgetItem(str(cam))
                             camItem.setData(QtCore.Qt.UserRole, cam)
                             self.cameraListWidget.addItem(camItem)
+                            self.cameras[str(cam)] = cam
                             log.debug("Adding new camera[%s,%s,%s] to database", newName, newip_,mac)
                             try:
                                 database.query(
@@ -694,6 +709,12 @@ class MainScreen(QMainWindow):
                 )
                 database.commit()
                 self.popup(f"Sucesfully deleted {self.selectedCameraName}")
+                deletingQItem = self.cameraListWidget.currentItem()
+                index = self.cameraListWidget.row(deletingQItem)
+                if index >= 0:
+                    self.cameraListWidget.takeItem(index)
+                self.cameras.pop(deletingQItem.text())
+                log.info("Removed camera %s", deletingQItem.text())
             except sqlite3.IntegrityError:
                 log.warning("Cannot remove camera")
 
