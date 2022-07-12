@@ -103,6 +103,7 @@ class MainScreen(QMainWindow):
         self.typingFrame.hide()
         self.detailedPopup.hide()
         self.textView.hide()
+        self.buttonExtra.hide()
 
         self.cameraListWidget.currentItemChanged.connect(self.changeSelectedCamera)
 
@@ -291,7 +292,8 @@ class MainScreen(QMainWindow):
                     # camera already existed (presumably)
                     oldName = known_names[known_ips.index(cam.ip)]
                     self.cameras.pop(oldName)
-                    notFound.remove(oldName)
+                    if oldName in notFound: # in case there's a duplicate ip or something
+                        notFound.remove(oldName)
 
                     self.cameras[str(cam)] = cam
                     items = self.cameraListWidget.findItems(oldName, QtCore.Qt.MatchExactly)
@@ -369,18 +371,21 @@ class MainScreen(QMainWindow):
             except AttributeError:
                 self.selectedCamera.parameters = {}
             return None
-        if checkParameter("iris") is not None:
-            self.labelIris.setText(Lookups.Iris[self.selectedCamera.properties.iris])
-        if checkParameter("gain") is not None:
-            self.labelGain.setText(str(self.selectedCamera.properties.gain*3)+" dB")
-        if checkParameter("shutter") is not None:
-            self.labelShutter.setText(Lookups.Shutter[self.selectedCamera.properties.shutter])
-        if checkParameter("zoom") is not None:
-            self.sliderZoom.setValue(self.selectedCamera.properties.zoom)
-        if checkParameter("focus") is not None:
-            self.sliderFocus.setValue(self.selectedCamera.properties.focus)
-        if checkParameter("exposureComp") is not None:
-            self.labelExpComp.setText(str(self.selectedCamera.properties.exposureComp*1.5-10.5)+" dB")
+        try:
+            if checkParameter("iris") is not None:
+                self.labelIris.setText(Lookups.Iris[self.selectedCamera.properties.iris])
+            if checkParameter("gain") is not None:
+                self.labelGain.setText(str(self.selectedCamera.properties.gain*3)+" dB")
+            if checkParameter("shutter") is not None:
+                self.labelShutter.setText(Lookups.Shutter[self.selectedCamera.properties.shutter])
+            if checkParameter("zoom") is not None:
+                self.sliderZoom.setValue(self.selectedCamera.properties.zoom)
+            if checkParameter("focus") is not None:
+                self.sliderFocus.setValue(self.selectedCamera.properties.focus)
+            if checkParameter("exposureComp") is not None:
+                self.labelExpComp.setText(str(self.selectedCamera.properties.exposureComp*1.5-10.5)+" dB")
+        except KeyError:
+            log.error("KeyError whilst looking up selected camera properties")
 
     def updateCameraProperties(self, camera=None, full=True, type=""):
         if camera is None:
@@ -430,6 +435,7 @@ class MainScreen(QMainWindow):
 
     def changeView(self, newViewFunc=None): # without a new view function, this can just clear popups
         self.textView.hide()
+        self.buttonExtra.hide()
         for item in self.tempUI:
             item.setParent(None)
             item.deleteLater()
@@ -568,6 +574,8 @@ class MainScreen(QMainWindow):
         self.labelMidRight.setText("Calibrate Joystick")
         self.labelTopRight.setText("Add Manual Camera")
         self.labelCurrentScreen.setText("Settings")
+        self.buttonExtra.setText("Remove Manual Camera")
+        self.buttonExtra.show()
 
         self.textView.show()
 
@@ -590,7 +598,10 @@ class MainScreen(QMainWindow):
             interfaces=subprocess.check_output("netsh interface ipv4 show config").split(b"\r\n\r\n")
             interface = multipleSpaceRegex.sub(" ",[str(x,"utf-8") for x in interfaces if ip in str(x)][0].strip())
         elif os.name=="posix":
-            interface = subprocess.check_output("ip a", shell=True)
+            try:
+                interface = subprocess.check_output("ip a", shell=True)
+            except subprocess.CalledProcessError:
+                interface = ""
         else:
             interface = ""
 
@@ -675,6 +686,17 @@ class MainScreen(QMainWindow):
 
             self.ButtonControl.input("", "Camera Name (# for simpleVisca)", setName)
 
+        def removeCamera():
+            try:
+                database.query(
+                    "DELETE FROM cameras WHERE name = ?",
+                    (self.selectedCameraName,),
+                )
+                database.commit()
+                self.popup(f"Sucesfully deleted {self.selectedCameraName}")
+            except sqlite3.IntegrityError:
+                log.warning("Cannot remove camera")
+
         isCalibrating = False
         def calibrateJoystick():
             # send LEARN and LEARNOFF
@@ -693,6 +715,7 @@ class MainScreen(QMainWindow):
                 self.ButtonControl.setShortcutActive(True)
                 self.labelBottomRight.setText("Preset Shortcuts On")
 
+        self.buttonExtra.clicked.connect(lambda: removeCamera())
         self.ButtonControl.connectFunctions({
             "TopLeft": lambda: self.discoverCameras(),
             "MidLeft": lambda: self.changeView(self.cameraConfigScreen),

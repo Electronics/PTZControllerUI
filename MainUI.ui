@@ -1070,6 +1070,19 @@ QListView::item[pingError=&quot;true&quot;] {
     <string>-1</string>
    </property>
   </widget>
+  <widget class="QPushButton" name="buttonExtra">
+   <property name="geometry">
+    <rect>
+     <x>580</x>
+     <y>290</y>
+     <width>141</width>
+     <height>61</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>ExtraButton</string>
+   </property>
+  </widget>
   <zorder>labelCurrentScreen</zorder>
   <zorder>ticker</zorder>
   <zorder>cameraListWidget</zorder>
@@ -1091,6 +1104,7 @@ QListView::item[pingError=&quot;true&quot;] {
   <zorder>typingFrame</zorder>
   <zorder>detailedPopup</zorder>
   <zorder>infoPopup</zorder>
+  <zorder>buttonExtra</zorder>
  </widget>
  <resources/>
  <connections/>
