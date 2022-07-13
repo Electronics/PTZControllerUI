@@ -664,6 +664,8 @@ class MainScreen(QMainWindow):
                 def setIP(newip_):
                     if newip_ == None:
                         self.popup("Canceled", 500)
+                        self.labelCenterMid.setText("Recall Preset")
+                        self.ButtonControl.functionPressDict["CenterMid"] = lambda: self.storePreset()
                         return
                     try:
                         socket.inet_aton(newip_)
@@ -692,11 +694,17 @@ class MainScreen(QMainWindow):
                                 database.commit()
                             except sqlite3.IntegrityError:
                                 log.warning("Cannot add manual camera to database due to already-existing entry")
+                            self.labelCenterMid.setText("Recall Preset")
+                            self.ButtonControl.functionPressDict["CenterMid"] = lambda: self.storePreset()
 
                     except socket.error:
                         self.popup("Invalid IP Address!")
+                        self.labelCenterMid.setText("Recall Preset")
+                        self.ButtonControl.functionPressDict["CenterMid"] = lambda: self.storePreset()
                         return
 
+                self.labelCenterMid.setText("•")
+                self.ButtonControl.functionPressDict["CenterMid"] = lambda: self.ButtonControl.typeChar(".")
                 self.ButtonControl.input("", "Camera IP", setIP)
 
             self.ButtonControl.input("", "Camera Name (# for simpleVisca)", setName)
