@@ -199,4 +199,5 @@ class ButtonControl(QObject):
         ]
         self.buttonEvent(buttonMap[num],release=not press)
     def decodeButtonRelease(self, num):
-        self.decodeButton(num,press=False)
+        pass
+        #self.decodeButton(num,press=False)
