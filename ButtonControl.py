@@ -94,6 +94,8 @@ class ButtonControl(QObject):
         else:
             functionDict = self.functionPressDict
         if isinstance(button, int):
+            if release:
+                return # don't double press!
             # numpad
             if button==-1:
                 # backspace
@@ -199,5 +201,4 @@ class ButtonControl(QObject):
         ]
         self.buttonEvent(buttonMap[num],release=not press)
     def decodeButtonRelease(self, num):
-        pass
-        #self.decodeButton(num,press=False)
+        self.decodeButton(num,press=False)
