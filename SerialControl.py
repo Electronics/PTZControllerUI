@@ -35,7 +35,7 @@ class SerialControl(QThread):
 
     def initPort(self):
         try:
-            self.port = serial.Serial(SERIAL_PORT, 115200)
+            self.port = serial.Serial(SERIAL_PORT, 115200, timeout=2)
 
             self.port.write(b'HELLO\n')
         except serial.SerialException:
@@ -134,6 +134,8 @@ class SerialControl(QThread):
             try:
                 while True:
                     data = self.port.readline().decode("utf-8").strip()
+                    if data=="":
+                        continue
                     dataSplit = serialRegex.search(data)
                     log.debug("Serial data: %s",data)
                     if not dataSplit:
