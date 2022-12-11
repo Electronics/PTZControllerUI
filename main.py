@@ -235,6 +235,7 @@ class MainScreen(QMainWindow):
         log.info("Searching for cameras")
         found = ViscaIPCamera.discoverCameras()
         found += ViscaIPCamera.discoverNonSony()
+        #TODO: sometimes discovery can duplicate a camera, causing failure then in removing an already-removed item when re-generating the UI list
         log.info("Found %d cameras", len(found))
         updateUI()
         self.popup("Found "+str(len(found))+" cameras")
@@ -550,7 +551,7 @@ class MainScreen(QMainWindow):
                         self.popup("Canceled",500)
                         return
                     # todo set name
-                    log.info("Changing camera name", self.selectedCamera.name, "to",newName)
+                    log.info(f"Changing camera name {self.selectedCamera.name} to {newName}")
                 self.ButtonControl.input(self.selectedCamera.name,"Camera Name",setName)
             else:
                 self.popup("No camera selected!")

@@ -288,7 +288,7 @@ class ViscaIPCamera:
 			s.bind(("", 52380))
 
 			discoverCmd = b"\x02ENQ:network\xFF\x33"
-			LOGGER.debug("Sending discover...")
+			LOGGER.debug("Sending sony discover...")
 			s.sendto(discoverCmd, ('<broadcast>', 52380))
 			cameras = []
 			try:
@@ -321,6 +321,7 @@ class ViscaIPCamera:
 				struct.pack("4sl", remote_addr.packed, socket.INADDR_ANY),
 			)
 			sock.bind(("", 8005))
+			LOGGER.debug("Sending non-sony discover...")
 			sock.sendto(b"SEARCH * UPGRADE", ("239.255.255.251", 8005))
 			try:
 				while True:
@@ -332,25 +333,32 @@ class ViscaIPCamera:
 		finally:
 			sock.close()
 
-		regex = re.compile(
-			r"REPLY OK\s+Client ID:(?P<client_id>[A-Fa-f0-9]{32})?\s+Device ID:(?P<device_id>[A-Fa-f0-9]{32})\s+DHCP=(?P<dhcp>\d).*IP=(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+MASK=(?P<mask>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+GATEWAY=(?P<gateway>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+MAC=(?P<mac>([A-Fa-f0-9]{2}[:-]){5}[A-Fa-f0-9]{2})\s+FDNS=(?P<dns>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})",
-			re.DOTALL,
-		)
+		regexes = [
+			re.compile(
+				r"REPLY OK\s+Client ID:(?P<client_id>[A-Fa-f0-9]{32})?\s+Device ID:(?P<device_id>[A-Fa-f0-9]{32})\s+DHCP=(?P<dhcp>\d).*IP=(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+MASK=(?P<mask>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+GATEWAY=(?P<gateway>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+MAC=(?P<mac>([A-Fa-f0-9]{2}[:-]){5}[A-Fa-f0-9]{2})\s+FDNS=(?P<dns>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})",
+				re.DOTALL,
+			),
+			re.compile(
+				r"REPLY OK\s+VERSION:(?P<version>[0-9]+.[0-9]+.[0-9]+)\s+DEVICE_MODEL:(?P<model>[A-Z0-9.]{4,})\s+Client ID:(?P<client_id>[A-Fa-f0-9]{32})?\s+Device ID:(?P<device_id>[A-Fa-f0-9]{32})\s+Uptime=(?P<uptime>[0-9]+)\s+DHCP=(?P<dhcp>\d).*IP=(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+MASK=(?P<mask>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+GATEWAY=(?P<gateway>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+MAC=(?P<mac>([A-Fa-f0-9]{2}[:-]){5}[A-Fa-f0-9]{2})\s+FDNS=(?P<dns>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})",
+				re.DOTALL,
+			)
+		]
 		found = []
 		for resp in responses:
-			mo = regex.match((resp.decode()))
-			if mo:
-				info = mo.groupdict()
-				# We don't seem to get camera names back from discover here so bodge a bit of device id
-				LOGGER.info("Found camera '%s' (%s) at IP %s", info["device_id"], info["mac"], info["ip"])
-				found.append(cls(
-					info["device_id"][:8],
-					info["ip"],
-					info["mac"],
-					netmask=info["mask"],
-					gateway=info["gateway"],
-					port=1259,
-					device_id=info["device_id"],
-					simple_visca=True,
-				))
+			for regex in regexes:
+				mo = regex.match((resp.decode()))
+				if mo:
+					info = mo.groupdict()
+					# We don't seem to get camera names back from discover here so bodge a bit of device id
+					LOGGER.info("Found camera '%s' (%s) at IP %s", info["device_id"], info["mac"], info["ip"])
+					found.append(cls(
+						info["device_id"][:8],
+						info["ip"],
+						info["mac"],
+						netmask=info["mask"],
+						gateway=info["gateway"],
+						port=1259,
+						device_id=info["device_id"],
+						simple_visca=True,
+					))
 		return found
