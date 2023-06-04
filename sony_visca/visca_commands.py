@@ -365,6 +365,17 @@ class Inquiry:
 	BlockEnlargement2 = bytearray.fromhex("81097e7e04ff")
 	BlockEnlargement3 = bytearray.fromhex("81097e7e05ff")
 
+	@classmethod
+	def decodePanTiltPosition(cls, bytes):
+		if len(bytes)!=19:
+			return None,None
+		try:
+			pan = bytes[10]<<12 | bytes[11]<<8 | bytes[12]<<4 | bytes[13]
+			tilt = bytes[14]<<12 | bytes[15]<<8 | bytes[16]<<4 | bytes[17]
+			return pan, tilt
+		except IndexError:
+			return None,None
+
 class Lookups():
 	VideoFormats = {
 		0: "1080p59",

@@ -118,8 +118,9 @@ class ViscaIPCamera:
 			self.cmd_queue.trigger_shutdown()
 			LOGGER.debug("Waiting for queue watcher to exit...")
 			await asyncio.gather(self._queue_loop)
-		self._remote_sock.close()
-		self._remote_sock = None
+		if self._remote_sock is not None:
+			self._remote_sock.close()
+			self._remote_sock = None
 		self.is_connected = False
 
 	async def _close_local(self):
