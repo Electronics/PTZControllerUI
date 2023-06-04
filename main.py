@@ -92,12 +92,20 @@ class MainScreen(QMainWindow):
         self.buttonRefresh.mouseReleaseEvent = lambda event: self.updateCameraProperties(full=True)
 
         self.setWindowTitle("PTZ Controller")
-        camPosScene = QGraphicsScene(self)
-        self.graphicsView.setScene(camPosScene)
-        self.camPosRect = QGraphicsRectItem(QtCore.QRectF(0, 0, 5, 5))
+        self.camPosScene = QGraphicsScene(self)
+        self.camPosScene.setSceneRect(QtCore.QRectF(self.graphicsView.rect())) # don't allow the scene to scroll / be bigger than the view
+        self.graphicsView.setScene(self.camPosScene)
+        self.camPosRect = QGraphicsRectItem(QtCore.QRectF(0, 0, 10, 10))
         self.camPosRect.setBrush(QColor(255, 0, 0))
         self.camPosRect.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable, True)
-        camPosScene.addItem(self.camPosRect)
+        self.camPosRect.mouseMoveEvent = self.camPosRectMoveEvent
+        self.camPosRect.mouseReleaseEvent = self.centerCamPosRect # TODO: add release of pan/tilt camera control
+        self.camPosScene.addItem(self.camPosRect)
+        self.centerCamPosRect()
+
+        self.camPosRef = QGraphicsRectItem(QtCore.QRectF(0, 0, 1, 1))
+        self.camPosRef.setPos(self.camPosScene.width() / 2 - self.camPosRef.rect().width()/2, self.camPosScene.height() / 2 - self.camPosRef.rect().height()/2)
+        self.camPosScene.addItem(self.camPosRef)
 
         self.infoPopup.hide()
         self.typingFrame.hide()
@@ -125,6 +133,33 @@ class MainScreen(QMainWindow):
         self.discoverCameras()
         # self.debug()
         self.nextCamera() # select a camera to start with please
+
+    def camPosRectMoveEvent(self, event):
+        super(QGraphicsRectItem, self.camPosRect).mouseMoveEvent(event)
+        x = self.camPosRect.pos().x()-(self.camPosScene.width() / 2) + (self.camPosRect.rect().width())
+        y = self.camPosRect.pos().y()-(self.camPosScene.height() / 2) + (self.camPosRect.rect().height())
+        NUM_STAGES = 8
+        x = min(max(int(x/(self.camPosScene.width()/2/NUM_STAGES)),-7),7)
+        y = -min(max(int(y/(self.camPosScene.height()/2/NUM_STAGES)),-7),7)
+        log.debug("Cam move: %d %d", x,y)
+
+        # pass this through to the serial decoder which already has all the logic in it
+        if hasattr(self, "serial"):
+            self.serial.vx = x
+            self.serial.vy = y
+            self.serial.moveCam()
+
+    def centerCamPosRect(self, *_):
+        self.camPosRect.setPos((self.camPosScene.width() / 2) - (self.camPosRect.rect().width()/2), (self.camPosScene.height() / 2) - (self.camPosRect.rect().height()/2))
+        x = self.camPosRect.pos().x() - (self.camPosScene.width() / 2) + (self.camPosRect.rect().width() / 2)
+        y = self.camPosRect.pos().y() - (self.camPosScene.height() / 2) + (self.camPosRect.rect().height() / 2)
+        log.debug("Center: %f %f", x, y)
+
+        # pass this through to the serial decoder which already has all the logic in it
+        if hasattr(self, "serial"):
+            self.serial.vx = 0
+            self.serial.vy = 0
+            self.serial.moveCam()
 
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
         super(MainScreen, self).keyPressEvent(event)
