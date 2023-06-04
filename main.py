@@ -107,6 +107,17 @@ class MainScreen(QMainWindow):
         self.camPosRef.setPos(self.camPosScene.width() / 2 - self.camPosRef.rect().width()/2, self.camPosScene.height() / 2 - self.camPosRef.rect().height()/2)
         self.camPosScene.addItem(self.camPosRef)
 
+        self.sliderX.setMinimum(-5120)
+        self.sliderX.setMaximum(5120)
+        self.sliderX.setValue(0)
+
+        self.sliderY.setMinimum(-1280)
+        self.sliderY.setMaximum(1280)
+        self.sliderY.setValue(0)
+
+        self.sliderZoomControl.valueChanged.connect(self.camZoomControl)
+        self.sliderZoomControl.sliderReleased.connect(self.camZoomControlRelease)
+
         self.infoPopup.hide()
         self.typingFrame.hide()
         self.detailedPopup.hide()
@@ -138,9 +149,9 @@ class MainScreen(QMainWindow):
         super(QGraphicsRectItem, self.camPosRect).mouseMoveEvent(event)
         x = self.camPosRect.pos().x()-(self.camPosScene.width() / 2) + (self.camPosRect.rect().width())
         y = self.camPosRect.pos().y()-(self.camPosScene.height() / 2) + (self.camPosRect.rect().height())
-        NUM_STAGES = 8
-        x = min(max(int(x/(self.camPosScene.width()/2/NUM_STAGES)),-7),7)
-        y = -min(max(int(y/(self.camPosScene.height()/2/NUM_STAGES)),-7),7)
+        NUM_STAGES = 16
+        x = min(max(int(x/(self.camPosScene.width()/2/(NUM_STAGES+1))),-NUM_STAGES),NUM_STAGES)
+        y = -min(max(int(y/(self.camPosScene.height()/2/(NUM_STAGES+1))),-NUM_STAGES),NUM_STAGES)
         log.debug("Cam move: %d %d", x,y)
 
         # pass this through to the serial decoder which already has all the logic in it
@@ -159,6 +170,19 @@ class MainScreen(QMainWindow):
         if hasattr(self, "serial"):
             self.serial.vx = 0
             self.serial.vy = 0
+            self.serial.moveCam()
+
+    def camZoomControl(self):
+        log.debug("Zoom Control: %d", self.sliderZoomControl.value())
+        if hasattr(self, "serial"):
+            self.serial.vz = self.sliderZoomControl.value()
+            self.serial.moveCam()
+
+    def camZoomControlRelease(self):
+        log.debug("Zoom Control release")
+        self.sliderZoomControl.setValue(0)
+        if hasattr(self, "serial"):
+            self.serial.vz = 0
             self.serial.moveCam()
 
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
@@ -434,6 +458,12 @@ class MainScreen(QMainWindow):
                 self.sliderFocus.setValue(self.selectedCamera.properties.focus)
             if checkParameter("exposureComp") is not None:
                 self.labelExpComp.setText(str(self.selectedCamera.properties.exposureComp*1.5-10.5)+" dB")
+            if checkParameter("pan") is not None:
+                log.info("Pan: %d", self.selectedCamera.properties.pan)
+                self.sliderX.setValue(self.selectedCamera.properties.pan)
+            if checkParameter("tilt") is not None:
+                log.info("Tilt: %d", self.selectedCamera.properties.tilt)
+                self.sliderY.setValue(self.selectedCamera.properties.tilt)
         except KeyError:
             log.error("KeyError whilst looking up selected camera properties")
 
@@ -450,6 +480,8 @@ class MainScreen(QMainWindow):
             camera.properties.decodeBlockEnlargement1(camera.inquire(Command(Inquiry.BlockEnlargement)))
         if type=="" or full:
             camera.properties.decodeBlockLens(camera.inquire(Command(Inquiry.BlockLens)))  # TODO: seperate out the camera inquire and check if it actualy responded
+            camera.properties.decodePanTiltPosition(camera.inquire(Command(Inquiry.PanTiltPos)))
+
         self.updatePropertiesUI()
 
     def toggleCameraProperty(self, parameter, qwidget, textTrue, textFalse, commandTrue=None, commandFalse=None, toggle=True, default=True):
@@ -504,8 +536,6 @@ class MainScreen(QMainWindow):
         self.labelMidRight.setText("Shutter")
         self.labelTopRight.setText("Focus")
         self.labelCurrentScreen.setText("Home")
-
-
 
         self.ButtonControl.connectFunctions({
             "TopLeft": lambda: self.discoverCameras(),

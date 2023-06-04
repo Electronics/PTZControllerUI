@@ -1,3 +1,4 @@
+import ctypes
 import logging
 from dataclasses import dataclass
 
@@ -177,4 +178,19 @@ class CameraProperties:
         self.completion = bool(response[1] & 0x80)
         self.colorHue = response[2]&0x07
 
-
+    def decodePanTiltPosition(self, response):
+        if response is None:
+            log.warning("Pan/Tilt Inquiry responded with None")
+            return
+        if len(response) != 19:
+            log.warning("Pan/Tilt Inquiry response was too short")
+            return
+        response = doTrimBecauseJamieSucks(response)
+        try:
+            pan = response[2] << 12 | response[3] << 8 | response[4] << 4 | response[5]
+            tilt = response[6] << 12 | response[7] << 8 | response[8] << 4 | response[9]
+            # it's two's compliment
+            self.pan = ctypes.c_int16(pan).value
+            self.tilt = ctypes.c_int16(tilt).value
+        except IndexError:
+            return

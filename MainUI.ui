@@ -381,6 +381,9 @@ QListView::item[pingError=&quot;true&quot;] {
     <enum>QFrame::Raised</enum>
    </property>
    <widget class="QSlider" name="sliderX">
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
     <property name="geometry">
      <rect>
       <x>10</x>
@@ -397,6 +400,9 @@ QListView::item[pingError=&quot;true&quot;] {
     </property>
    </widget>
    <widget class="QSlider" name="sliderY">
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
     <property name="geometry">
      <rect>
       <x>150</x>
@@ -410,6 +416,9 @@ QListView::item[pingError=&quot;true&quot;] {
     </property>
    </widget>
    <widget class="QSlider" name="sliderZoom">
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
     <property name="geometry">
      <rect>
       <x>190</x>
@@ -426,6 +435,9 @@ QListView::item[pingError=&quot;true&quot;] {
     </property>
    </widget>
    <widget class="QSlider" name="sliderFocus">
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
     <property name="geometry">
      <rect>
       <x>230</x>
@@ -669,6 +681,28 @@ QListView::item[pingError=&quot;true&quot;] {
     </property>
     <property name="text">
      <string>Refresh</string>
+    </property>
+   </widget>
+   <widget class="QSlider" name="sliderZoomControl">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>120</x>
+      <y>20</y>
+      <width>16</width>
+      <height>111</height>
+     </rect>
+    </property>
+    <property name="minimum">
+     <number>-7</number>
+    </property>
+    <property name="maximum">
+     <number>7</number>
+    </property>
+    <property name="orientation">
+     <enum>Qt::Vertical</enum>
     </property>
    </widget>
   </widget>
