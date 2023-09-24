@@ -363,7 +363,7 @@ class ViscaIPCamera:
 
 		regexes = [
 			re.compile(
-				r"REPLY OK\s+Client ID:(?P<client_id>[A-Fa-f0-9]{32})?\s+Device ID:(?P<device_id>[A-Fa-f0-9]{32})\s+DHCP=(?P<dhcp>\d).*IP=(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+MASK=(?P<mask>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+GATEWAY=(?P<gateway>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+MAC=(?P<mac>([A-Fa-f0-9]{2}[:-]){5}[A-Fa-f0-9]{2})\s+FDNS=(?P<dns>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})",
+				r"REPLY OK\s+Client ID:(?P<client_id>[A-Fa-f0-9]{32})?\s+Device ID:(?P<device_id>[A-Fa-f0-9]{32})(\s+Uptime=\d*)?\s+DHCP=(?P<dhcp>\d).*IP=(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+MASK=(?P<mask>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+GATEWAY=(?P<gateway>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+MAC=(?P<mac>([A-Fa-f0-9]{2}[:-]){5}[A-Fa-f0-9]{2})\s+FDNS=(?P<dns>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})",
 				re.DOTALL,
 			),
 			re.compile(
