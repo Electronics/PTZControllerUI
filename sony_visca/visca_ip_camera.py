@@ -144,6 +144,8 @@ class ViscaIPCamera:
 			gateway = str(network[1])  # generate new gateway in the network
 		if not name:
 			name = self.name
+			if self.simple_visca:
+				LOGGER.info("Requested to change name on a PTZOptics camera, this is not possible")
 		mac_bytes = bytes(self.mac, encoding="utf-8")
 		if self.simple_visca:
 			# PTZOptics
@@ -339,6 +341,7 @@ class ViscaIPCamera:
 	def discoverNonSony(cls):
 		"""Discover non-Sony PTZ cameras over multicast"""
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+		sock.settimeout(0.5)
 		responses = []
 		try:
 			# sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

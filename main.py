@@ -277,14 +277,17 @@ class MainScreen(QMainWindow):
 
     def getManualCamerasFromdb(self):
         """Get camera objects from DB data"""
-        rows = database.query("SELECT * FROM cameras WHERE autocreated = 0")
+        rows = database.query("SELECT * FROM cameras WHERE autocreated = 0 or (display_name is not null and display_name <> '')")
         extras = []
         for row in rows:
+            display_name = None
+            if row["display_name"] and row["display_name"]!="":
+                display_name = row["display_name"]
             if row["type"] == "sony":
-                extras.append(ViscaIPCamera(row["name"], row["ip"], row["mac"])) # TODO: update mac?
+                extras.append(ViscaIPCamera(display_name if display_name else row["name"], row["ip"], row["mac"])) # TODO: update mac?
             else:
-                extras.append(ViscaIPCamera(row["name"], row["ip"], row["mac"], port=1259, simple_visca=True))
-        log.info("Found %d extra cameras (from db)", len(extras))
+                extras.append(ViscaIPCamera(display_name if display_name else row["name"], row["ip"], row["mac"], port=1259, simple_visca=True))
+        log.info("Found %d extra cameras (from db) (includes autocreated with added display names)", len(extras))
         return extras
 
     def discoverCameras(self):
@@ -305,10 +308,13 @@ class MainScreen(QMainWindow):
                 row = database.query("SELECT * FROM cameras WHERE mac = ?", (cam.mac,), one=True)
                 if row:
                     # update it
+                    if row["display_name"] and row["display_name"] != "":
+                        log.debug("Skipping camera[%s,%s] update as has set display_name (%s)",cam.name, cam.ip, row["display_name"])
+                        continue
                     log.debug("Updating camera[%s,%s] to database",cam.name, cam.ip)
                     database.query(
                         "UPDATE cameras SET name = ?, type = ?, ip = ?, autocreated = 1 WHERE mac = ?",
-                        (cam.name, "sony", cam.ip, cam.mac),
+                        (cam.name, "chinese" if cam.simple_visca else "sony", cam.ip, cam.mac),
                     )
                     # Set the display name of the camera if set in db
                     if row["display_name"]:
@@ -318,11 +324,22 @@ class MainScreen(QMainWindow):
                     log.debug("Adding new camera[%s,%s] to database", cam.name, cam.ip)
                     database.query(
                         "INSERT INTO cameras (name, ip, type, mac, autocreated) VALUES (?, ?, ?, ?, 1)",
-                        (cam.name, cam.ip, "sony", cam.mac),
+                        (cam.name, cam.ip, "chinese" if cam.simple_visca else "sony", cam.mac),
                     )
                 database.commit()
 
-        found += self.getManualCamerasFromdb()
+        manualExtras = self.getManualCamerasFromdb()
+
+        for camera in manualExtras:
+            for fcamera in found:
+                if fcamera.mac == camera.mac:
+                    log.info("Found a manual db entry that matches a found camera, using stored display name")
+                    fcamera.name = camera.name
+                    break # inner loop
+            else:
+                # else for for loop (if not break'd)
+                found.append(camera) # just add cameras that we don't know about
+
         database.close()
 
         known_ips = [c.ip for k, c in self.cameras.items()] # old list of ips
@@ -616,7 +633,19 @@ class MainScreen(QMainWindow):
                         return
                     # todo set name
                     if self.selectedCamera:
-                        self.selectedCamera.setIP(name=newName)
+                        if self.selectedCamera.simple_visca:
+                            # PTZ optics cameras don't contain a name field we can set, so just change the display name
+                            log.info("PTZ Optics camera so adding manual camera with name override")
+                            try:
+                                database.query(
+                                    "UPDATE cameras SET display_name = ? WHERE mac = ?",
+                                    (newName, self.selectedCamera.mac),
+                                )
+                                database.commit()
+                            except sqlite3.IntegrityError:
+                                log.warning("Cannot add manual camera to database due to already-existing entry")
+                        else:
+                            self.selectedCamera.setIP(name=newName)
                     log.info(f"Changing camera name {self.selectedCamera.name} to {newName}")
 
                 self.ButtonControl.input(self.selectedCamera.name,"Camera Name",setName)
@@ -780,8 +809,8 @@ class MainScreen(QMainWindow):
         def removeCamera():
             try:
                 database.query(
-                    "DELETE FROM cameras WHERE name = ?",
-                    (self.selectedCameraName,),
+                    "DELETE FROM cameras WHERE mac = ?",
+                    (self.selectedCamera.mac,),
                 )
                 database.commit()
                 self.popup(f"Sucesfully deleted {self.selectedCameraName}")
@@ -793,6 +822,8 @@ class MainScreen(QMainWindow):
                 log.info("Removed camera %s", deletingQItem.text())
             except sqlite3.IntegrityError:
                 log.warning("Cannot remove camera")
+            except KeyError:
+                log.warning("Camera was already removed from list (likely duplicate)")
 
         isCalibrating = False
         def calibrateJoystick():
