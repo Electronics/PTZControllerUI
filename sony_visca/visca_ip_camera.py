@@ -128,7 +128,7 @@ class ViscaIPCamera:
 		self._LOCAL_SOCK.close()
 		self.__class__._LOCAL_SOCK = None
 
-	def setIP(self, ip=None, netmask=None, gateway=None, name=None):
+	def setIP(self, ip=None, netmask=None, gateway=None, name=None, dhcp=None):
 		"""Set IP address of camera
 		Currently only compatible with Sony cameras.
 		"""
@@ -139,19 +139,46 @@ class ViscaIPCamera:
 			netmask = self.netmask
 		if not gateway:
 			gateway = self.gateway
+		network = ipaddress.IPv4Network(f"{ip}/{netmask}", strict=False)
+		if ipaddress.ip_address(gateway) not in network:
+			gateway = str(network[1])  # generate new gateway in the network
 		if not name:
 			name = self.name
 		mac_bytes = bytes(self.mac, encoding="utf-8")
-		command = (b"\x02MAC:"+mac_bytes+b"\xFFIPADR:"+bytes(ip, encoding="utf-8")+
-					b"\xFFMASK:"+bytes(netmask, encoding="utf-8")+b"\xFFGATEWAY:"+bytes(gateway, encoding="utf-8")+
-					b"\xFFNAME:"+bytes(name, encoding="utf-8")+b"\xFF\x03")
-		with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-			sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-			sock.sendto(command, ("<broadcast>", 52380))
-			LOGGER.info("setIP sent to %r, new data: ip=%r, name=%r", self.mac, ip, name)
-			resp = sock.recv(1024)
-			LOGGER.debug("Raw response from setIP: %r", resp)
-			assert resp == b"\x02ACK:" + mac_bytes + b"\xff\x03", "setIP response is not as expected!"
+		if self.simple_visca:
+			# PTZOptics
+			command = (b"CONFIGNET\nDevice ID:"+bytes(self.device_id,encoding="utf-8")+b"\nClient ID:bdb47600e5c445338a30a59dd902c842\ndhcp="+(b"1" if dhcp else b"0")+
+					b"\nipaddr="+bytes(ip, encoding="utf-8")+b"\nnetmask="+bytes(netmask, encoding="utf-8")+
+					b"\ngateway="+bytes(gateway, encoding="utf-8")+b"\nfdns=8.8.8.8\nmacaddr="+mac_bytes)
+			with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+				remote_addr = ipaddress.ip_address("239.255.255.251")
+				sock.setsockopt(
+					socket.IPPROTO_IP,
+					socket.IP_ADD_MEMBERSHIP,
+					struct.pack("4sl", remote_addr.packed, socket.INADDR_ANY),
+				)
+				LOGGER.info("setIP sent to non-sony %r, new data: ip=%r, name=%r", self.mac, ip, name)
+				sock.sendto(command, ("239.255.255.251", 8005))
+				# try:
+				# 	resp = sock.recv(1024)
+				# 	LOGGER.debug("Raw response from setIP: %r", resp)
+				# 	assert "SUCCEED" in resp.decode("utf-8"), "setIP non-sony is not as expected!"
+				# except socket.timeout:
+				# 	LOGGER.warning("Couldn't get a response for non-sony setIP, possibly in different subnet?")
+		else:
+			command = (b"\x02MAC:"+mac_bytes+b"\xFFIPADR:"+bytes(ip, encoding="utf-8")+
+						b"\xFFMASK:"+bytes(netmask, encoding="utf-8")+b"\xFFGATEWAY:"+bytes(gateway, encoding="utf-8")+
+						b"\xFFNAME:"+bytes(name, encoding="utf-8")+b"\xFF\x03")
+			with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+				sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+				sock.sendto(command, ("<broadcast>", 52380))
+				LOGGER.info("setIP sent to %r, new data: ip=%r, name=%r", self.mac, ip, name)
+				try:
+					resp = sock.recv(1024)
+					LOGGER.debug("Raw response from setIP: %r", resp)
+					assert resp == b"\x02ACK:" + mac_bytes + b"\xff\x03", "setIP response is not as expected!"
+				except socket.timeout:
+					LOGGER.warning("Couldn't get a response for setIP, possibly in different subnet?")
 
 	def queueCommands(self, *args, override=True):
 		"""Queue one or more messages to be sent, generally this overrides the last command unless override=False"""

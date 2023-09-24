@@ -583,7 +583,6 @@ class MainScreen(QMainWindow):
                     self.popup("Canceled",500)
                     return
                 #todo: validate?
-                #todo set the IP and subnet
                 log.info("Changing camera IP/sub %s to %s/%s",self.selectedCameraName,self._tempIPAddress,newSubnet)
                 try:
                     if self.selectedCamera:
@@ -616,7 +615,10 @@ class MainScreen(QMainWindow):
                         self.popup("Canceled",500)
                         return
                     # todo set name
+                    if self.selectedCamera:
+                        self.selectedCamera.setIP(name=newName)
                     log.info(f"Changing camera name {self.selectedCamera.name} to {newName}")
+
                 self.ButtonControl.input(self.selectedCamera.name,"Camera Name",setName)
             else:
                 self.popup("No camera selected!")
