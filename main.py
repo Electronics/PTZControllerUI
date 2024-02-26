@@ -1111,7 +1111,7 @@ class MainScreen(QMainWindow):
 
         self.layout().addWidget(frame)
         frame.setFixedSize(700, 400)
-        frame.move(self.width() / 2 - frame.width() / 2, self.height() / 2 - frame.height() / 2)
+        frame.move(int(self.width() / 2 - frame.width() / 2), int(self.height() / 2 - frame.height() / 2))
         self.tempUI.append(frame)
 
     def exposureMenu(self):
@@ -1173,7 +1173,7 @@ class MainScreen(QMainWindow):
 
         self.layout().addWidget(frame)
         frame.setFixedSize(500,200)
-        frame.move(self.width()/2-frame.width()/2,self.height()/2-frame.height()/2)
+        frame.move(int(self.width() / 2 - frame.width() / 2), int(self.height() / 2 - frame.height() / 2))
         self.tempUI.append(frame)
 
     def whitebalanceMenu(self):
@@ -1243,7 +1243,7 @@ class MainScreen(QMainWindow):
 
         self.layout().addWidget(frame)
         frame.setFixedSize(600, 200)
-        frame.move(self.width() / 2 - frame.width() / 2, self.height() / 2 - frame.height() / 2)
+        frame.move(int(self.width() / 2 - frame.width() / 2), int(self.height() / 2 - frame.height() / 2))
         self.tempUI.append(frame)
 
     def dynamicRangeMenu(self):
@@ -1300,7 +1300,7 @@ class MainScreen(QMainWindow):
 
         self.layout().addWidget(frame)
         frame.setFixedSize(600, 200)
-        frame.move(self.width() / 2 - frame.width() / 2, self.height() / 2 - frame.height() / 2)
+        frame.move(int(self.width() / 2 - frame.width() / 2), int(self.height() / 2 - frame.height() / 2))
         self.tempUI.append(frame)
 
     def noiseReductionMenu(self):
@@ -1368,7 +1368,7 @@ class MainScreen(QMainWindow):
 
         self.layout().addWidget(frame)
         frame.setFixedSize(500, 200)
-        frame.move(self.width() / 2 - frame.width() / 2, self.height() / 2 - frame.height() / 2)
+        frame.move(int(self.width() / 2 - frame.width() / 2), int(self.height() / 2 - frame.height() / 2))
         self.tempUI.append(frame)
 
     def shutdownScreen(self):
